@@ -32,8 +32,8 @@
   "hotPaths": [
     {
       "path": "src/cli.ts",
-      "accessCount": 5,
-      "lastAccessed": 1774910559532,
+      "accessCount": 8,
+      "lastAccessed": 1774910597440,
       "type": "file"
     },
     {
@@ -118,6 +118,12 @@
       "path": "src/commands/describe.ts",
       "accessCount": 1,
       "lastAccessed": 1774910551530,
+      "type": "file"
+    },
+    {
+      "path": "src/commands/list.ts",
+      "accessCount": 1,
+      "lastAccessed": 1774910586107,
       "type": "file"
     }
   ],
