@@ -31,6 +31,12 @@
   "directoryMap": {},
   "hotPaths": [
     {
+      "path": "src/cli.ts",
+      "accessCount": 3,
+      "lastAccessed": 1774910349323,
+      "type": "file"
+    },
+    {
       "path": "package.json",
       "accessCount": 2,
       "lastAccessed": 1774910277162,
@@ -67,9 +73,21 @@
       "type": "file"
     },
     {
-      "path": "src/cli.ts",
+      "path": "src/types.ts",
       "accessCount": 1,
-      "lastAccessed": 1774910282339,
+      "lastAccessed": 1774910316396,
+      "type": "file"
+    },
+    {
+      "path": "src/config.ts",
+      "accessCount": 1,
+      "lastAccessed": 1774910320478,
+      "type": "file"
+    },
+    {
+      "path": "src/commands/init.ts",
+      "accessCount": 1,
+      "lastAccessed": 1774910341482,
       "type": "file"
     }
   ],

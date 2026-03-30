@@ -1,0 +1,45 @@
+export interface KairnConfig {
+  anthropic_api_key: string;
+  default_runtime: string;
+  created_at: string;
+}
+
+export interface ToolSelection {
+  tool_id: string;
+  reason: string;
+}
+
+export interface EnvironmentSpec {
+  id: string;
+  name: string;
+  description: string;
+  intent: string;
+  created_at: string;
+  tools: ToolSelection[];
+  harness: {
+    claude_md: string;
+    settings: Record<string, unknown>;
+    mcp_config: Record<string, unknown>;
+    commands: Record<string, string>;
+    rules: Record<string, string>;
+    skills: Record<string, string>;
+    agents: Record<string, string>;
+    docs: Record<string, string>;
+  };
+}
+
+export interface RegistryTool {
+  id: string;
+  name: string;
+  description: string;
+  category: string;
+  tier: number;
+  type: "mcp_server" | "plugin" | "hook";
+  auth: "none" | "api_key" | "oauth" | "connection_string";
+  best_for: string[];
+  install: {
+    mcp_config?: Record<string, unknown>;
+    plugin_command?: string;
+    hook_config?: Record<string, unknown>;
+  };
+}
