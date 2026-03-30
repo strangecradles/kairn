@@ -2,21 +2,44 @@
   "name": "kairn",
   "version": "0.1.0",
   "description": "Compile natural language intent into optimized Claude Code environments",
+  "author": "Ashton Perlroth",
+  "license": "MIT",
   "type": "module",
   "bin": {
     "kairn": "./bin/kairn.js"
   },
+  "files": [
+    "bin/",
+    "dist/",
+    "src/registry/tools.json",
+    "LICENSE",
+    "README.md"
+  ],
   "scripts": {
     "build": "tsup",
-    "dev": "tsup --watch"
+    "dev": "tsup --watch",
+    "prepublishOnly": "npm run build"
   },
   "keywords": [
     "claude-code",
-    "cli",
+    "claude",
+    "ai",
     "agent",
-    "environment"
+    "environment",
+    "mcp",
+    "cli",
+    "harness",
+    "llm",
+    "developer-tools"
   ],
-  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ashtonperlroth/kairn"
+  },
+  "homepage": "https://github.com/ashtonperlroth/kairn#readme",
+  "engines": {
+    "node": ">=18"
+  },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.39.0",
     "@inquirer/prompts": "^7.0.0",

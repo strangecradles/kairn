@@ -1,0 +1,20 @@
+# Source & dev files (npm gets dist/ + registry only)
+src/
+tsconfig.json
+tsup.config.ts
+*.tsbuildinfo
+
+# Dev harness & internal docs
+.claude/
+.omc/
+CLAUDE.md
+PLAN.md
+RESEARCH.md
+SPEC.md
+
+# Git stuff
+.git/
+.gitignore
+
+# Misc
+node_modules/
