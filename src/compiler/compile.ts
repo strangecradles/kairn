@@ -1,5 +1,6 @@
 import fs from "fs/promises";
 import path from "path";
+import { fileURLToPath } from "url";
 import crypto from "crypto";
 import Anthropic from "@anthropic-ai/sdk";
 import { loadConfig, getEnvsDir, ensureDirs } from "../config.js";
@@ -7,9 +8,24 @@ import { SYSTEM_PROMPT } from "./prompt.js";
 import type { EnvironmentSpec, RegistryTool } from "../types.js";
 
 async function loadRegistry(): Promise<RegistryTool[]> {
-  const registryPath = new URL("../registry/tools.json", import.meta.url);
-  const data = await fs.readFile(registryPath, "utf-8");
-  return JSON.parse(data) as RegistryTool[];
+  // Resolve relative to the source tree root, not dist/
+  const __filename = fileURLToPath(import.meta.url);
+  const __dirname = path.dirname(__filename);
+  // Works both in dev (src/compiler/) and built (dist/) by walking up to find the registry
+  const candidates = [
+    path.resolve(__dirname, "../registry/tools.json"),       // dev: src/compiler -> src/registry
+    path.resolve(__dirname, "../src/registry/tools.json"),   // built: dist -> src/registry
+    path.resolve(__dirname, "../../src/registry/tools.json"),// built: dist/compiler -> src/registry
+  ];
+  for (const candidate of candidates) {
+    try {
+      const data = await fs.readFile(candidate, "utf-8");
+      return JSON.parse(data) as RegistryTool[];
+    } catch {
+      continue;
+    }
+  }
+  throw new Error("Could not find tools.json registry");
 }
 
 function buildUserMessage(intent: string, registry: RegistryTool[]): string {
