@@ -2,19 +2,69 @@ import { Command } from "commander";
 import { password, select } from "@inquirer/prompts";
 import chalk from "chalk";
 import Anthropic from "@anthropic-ai/sdk";
+import OpenAI from "openai";
 import { execFileSync } from "child_process";
 import { loadConfig, saveConfig, getConfigPath } from "../config.js";
-import type { KairnConfig } from "../types.js";
+import type { KairnConfig, LLMProvider } from "../types.js";
 
-async function verifyApiKey(apiKey: string): Promise<boolean> {
+const PROVIDER_MODELS: Record<LLMProvider, { name: string; models: { name: string; value: string }[] }> = {
+  anthropic: {
+    name: "Anthropic",
+    models: [
+      { name: "Claude Sonnet 4 (recommended — fast, cheap)", value: "claude-sonnet-4-20250514" },
+      { name: "Claude Opus 4 (highest quality)", value: "claude-opus-4-20250514" },
+      { name: "Claude Haiku 3.5 (fastest, cheapest)", value: "claude-3-5-haiku-20241022" },
+    ],
+  },
+  openai: {
+    name: "OpenAI",
+    models: [
+      { name: "GPT-4o (recommended)", value: "gpt-4o" },
+      { name: "GPT-4o mini (faster, cheaper)", value: "gpt-4o-mini" },
+      { name: "o3 (reasoning)", value: "o3" },
+    ],
+  },
+  google: {
+    name: "Google Gemini",
+    models: [
+      { name: "Gemini 2.5 Flash (recommended)", value: "gemini-2.5-flash-preview-05-20" },
+      { name: "Gemini 2.5 Pro (highest quality)", value: "gemini-2.5-pro-preview-05-06" },
+    ],
+  },
+};
+
+async function verifyKey(provider: LLMProvider, apiKey: string, model: string): Promise<boolean> {
   try {
-    const client = new Anthropic({ apiKey });
-    await client.messages.create({
-      model: "claude-haiku-4-5-20251001",
-      max_tokens: 10,
-      messages: [{ role: "user", content: "ping" }],
-    });
-    return true;
+    if (provider === "anthropic") {
+      const client = new Anthropic({ apiKey });
+      await client.messages.create({
+        model: "claude-3-5-haiku-20241022",
+        max_tokens: 10,
+        messages: [{ role: "user", content: "ping" }],
+      });
+      return true;
+    } else if (provider === "openai") {
+      const client = new OpenAI({ apiKey });
+      await client.chat.completions.create({
+        model: "gpt-4o-mini",
+        max_tokens: 10,
+        messages: [{ role: "user", content: "ping" }],
+      });
+      return true;
+    } else if (provider === "google") {
+      // Google uses OpenAI-compatible API
+      const client = new OpenAI({
+        apiKey,
+        baseURL: "https://generativelanguage.googleapis.com/v1beta/openai/",
+      });
+      await client.chat.completions.create({
+        model: "gemini-2.5-flash-preview-05-20",
+        max_tokens: 10,
+        messages: [{ role: "user", content: "ping" }],
+      });
+      return true;
+    }
+    return false;
   } catch {
     return false;
   }
@@ -43,13 +93,24 @@ export const initCommand = new Command("init")
       console.log(chalk.yellow("  Running setup will overwrite it.\n"));
     }
 
-    const provider = await select({
+    const provider = await select<LLMProvider>({
       message: "LLM provider",
-      choices: [{ name: "Anthropic (Claude)", value: "anthropic" }],
+      choices: [
+        { name: "Anthropic (Claude) — recommended", value: "anthropic" as LLMProvider },
+        { name: "OpenAI (GPT)", value: "openai" as LLMProvider },
+        { name: "Google (Gemini)", value: "google" as LLMProvider },
+      ],
+    });
+
+    const providerInfo = PROVIDER_MODELS[provider];
+
+    const model = await select({
+      message: "Compilation model",
+      choices: providerInfo.models,
     });
 
     const apiKey = await password({
-      message: "API key",
+      message: `${providerInfo.name} API key`,
       mask: "*",
     });
 
@@ -59,7 +120,7 @@ export const initCommand = new Command("init")
     }
 
     console.log(chalk.dim("\n  Verifying API key..."));
-    const valid = await verifyApiKey(apiKey);
+    const valid = await verifyKey(provider, apiKey, model);
 
     if (!valid) {
       console.log(
@@ -71,14 +132,19 @@ export const initCommand = new Command("init")
     console.log(chalk.green("  ✓ API key verified"));
 
     const config: KairnConfig = {
-      anthropic_api_key: apiKey,
-      default_runtime: provider,
+      provider,
+      api_key: apiKey,
+      model,
+      default_runtime: "claude-code",
       created_at: new Date().toISOString(),
     };
 
     await saveConfig(config);
     console.log(
       chalk.green("  ✓ Config saved to ") + chalk.dim(getConfigPath())
+    );
+    console.log(
+      chalk.dim(`  ✓ Provider: ${providerInfo.name}, Model: ${model}`)
     );
 
     const hasClaude = detectClaudeCode();

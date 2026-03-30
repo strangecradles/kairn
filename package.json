@@ -10,13 +10,19 @@
     "build": "tsup",
     "dev": "tsup --watch"
   },
-  "keywords": ["claude-code", "cli", "agent", "environment"],
+  "keywords": [
+    "claude-code",
+    "cli",
+    "agent",
+    "environment"
+  ],
   "license": "MIT",
   "dependencies": {
     "@anthropic-ai/sdk": "^0.39.0",
     "@inquirer/prompts": "^7.0.0",
     "chalk": "^5.0.0",
-    "commander": "^13.0.0"
+    "commander": "^13.0.0",
+    "openai": "^6.33.0"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",

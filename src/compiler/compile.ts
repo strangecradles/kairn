@@ -3,19 +3,18 @@ import path from "path";
 import { fileURLToPath } from "url";
 import crypto from "crypto";
 import Anthropic from "@anthropic-ai/sdk";
+import OpenAI from "openai";
 import { loadConfig, getEnvsDir, ensureDirs } from "../config.js";
 import { SYSTEM_PROMPT } from "./prompt.js";
-import type { EnvironmentSpec, RegistryTool } from "../types.js";
+import type { EnvironmentSpec, RegistryTool, KairnConfig } from "../types.js";
 
 async function loadRegistry(): Promise<RegistryTool[]> {
-  // Resolve relative to the source tree root, not dist/
   const __filename = fileURLToPath(import.meta.url);
   const __dirname = path.dirname(__filename);
-  // Works both in dev (src/compiler/) and built (dist/) by walking up to find the registry
   const candidates = [
-    path.resolve(__dirname, "../registry/tools.json"),       // dev: src/compiler -> src/registry
-    path.resolve(__dirname, "../src/registry/tools.json"),   // built: dist -> src/registry
-    path.resolve(__dirname, "../../src/registry/tools.json"),// built: dist/compiler -> src/registry
+    path.resolve(__dirname, "../registry/tools.json"),
+    path.resolve(__dirname, "../src/registry/tools.json"),
+    path.resolve(__dirname, "../../src/registry/tools.json"),
   ];
   for (const candidate of candidates) {
     try {
@@ -36,19 +35,10 @@ function buildUserMessage(intent: string, registry: RegistryTool[]): string {
     )
     .join("\n");
 
-  return `## User Intent
-
-${intent}
-
-## Available Tool Registry
-
-${registrySummary}
-
-Generate the EnvironmentSpec JSON now.`;
+  return `## User Intent\n\n${intent}\n\n## Available Tool Registry\n\n${registrySummary}\n\nGenerate the EnvironmentSpec JSON now.`;
 }
 
 function parseSpecResponse(text: string): Omit<EnvironmentSpec, "id" | "intent" | "created_at"> {
-  // Strip markdown code fences if present
   let cleaned = text.trim();
   if (cleaned.startsWith("```")) {
     cleaned = cleaned.replace(/^```(?:json)?\n?/, "").replace(/\n?```$/, "");
@@ -56,33 +46,61 @@ function parseSpecResponse(text: string): Omit<EnvironmentSpec, "id" | "intent" 
   return JSON.parse(cleaned);
 }
 
-export async function compile(intent: string): Promise<EnvironmentSpec> {
+async function callLLM(config: KairnConfig, userMessage: string): Promise<string> {
+  if (config.provider === "anthropic") {
+    const client = new Anthropic({ apiKey: config.api_key });
+    const response = await client.messages.create({
+      model: config.model,
+      max_tokens: 8192,
+      system: SYSTEM_PROMPT,
+      messages: [{ role: "user", content: userMessage }],
+    });
+    const textBlock = response.content.find((block) => block.type === "text");
+    if (!textBlock || textBlock.type !== "text") {
+      throw new Error("No text response from compiler LLM");
+    }
+    return textBlock.text;
+  } else if (config.provider === "openai" || config.provider === "google") {
+    const clientOptions: { apiKey: string; baseURL?: string } = { apiKey: config.api_key };
+    if (config.provider === "google") {
+      clientOptions.baseURL = "https://generativelanguage.googleapis.com/v1beta/openai/";
+    }
+    const client = new OpenAI(clientOptions);
+    const response = await client.chat.completions.create({
+      model: config.model,
+      max_tokens: 8192,
+      messages: [
+        { role: "system", content: SYSTEM_PROMPT },
+        { role: "user", content: userMessage },
+      ],
+    });
+    const text = response.choices[0]?.message?.content;
+    if (!text) {
+      throw new Error("No text response from compiler LLM");
+    }
+    return text;
+  }
+  throw new Error(`Unsupported provider: ${config.provider}`);
+}
+
+export async function compile(
+  intent: string,
+  onProgress?: (msg: string) => void
+): Promise<EnvironmentSpec> {
   const config = await loadConfig();
   if (!config) {
     throw new Error("No config found. Run `kairn init` first.");
   }
 
+  onProgress?.("Loading tool registry...");
   const registry = await loadRegistry();
-  const client = new Anthropic({ apiKey: config.anthropic_api_key });
 
-  const response = await client.messages.create({
-    model: "claude-sonnet-4-6",
-    max_tokens: 8192,
-    system: SYSTEM_PROMPT,
-    messages: [
-      {
-        role: "user",
-        content: buildUserMessage(intent, registry),
-      },
-    ],
-  });
+  onProgress?.(`Compiling with ${config.provider} (${config.model})...`);
+  const userMessage = buildUserMessage(intent, registry);
+  const responseText = await callLLM(config, userMessage);
 
-  const textBlock = response.content.find((block) => block.type === "text");
-  if (!textBlock || textBlock.type !== "text") {
-    throw new Error("No text response from compiler LLM");
-  }
-
-  const parsed = parseSpecResponse(textBlock.text);
+  onProgress?.("Parsing environment spec...");
+  const parsed = parseSpecResponse(responseText);
 
   const spec: EnvironmentSpec = {
     id: `env_${crypto.randomUUID()}`,

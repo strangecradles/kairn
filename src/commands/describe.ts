@@ -56,12 +56,16 @@ export const describeCommand = new Command("describe")
       process.exit(1);
     }
 
-    // 3. Compile
-    console.log(chalk.dim("\n  Analyzing workflow..."));
+    // 3. Compile with progress
+    console.log("");
     let spec;
     try {
-      spec = await compile(intent);
+      spec = await compile(intent, (msg) => {
+        process.stdout.write(`\r  ${chalk.dim(msg)}                    `);
+      });
+      process.stdout.write("\r                                              \r");
     } catch (err) {
+      process.stdout.write("\r                                              \r");
       const msg = err instanceof Error ? err.message : String(err);
       console.log(chalk.red(`\n  Compilation failed: ${msg}\n`));
       process.exit(1);
