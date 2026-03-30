@@ -1,6 +1,6 @@
 import fs from "fs/promises";
 import path from "path";
-import type { EnvironmentSpec } from "../types.js";
+import type { EnvironmentSpec, RegistryTool } from "../types.js";
 
 async function writeFile(filePath: string, content: string): Promise<void> {
   await fs.mkdir(path.dirname(filePath), { recursive: true });
@@ -87,7 +87,10 @@ export async function writeEnvironment(
   return written;
 }
 
-export function summarizeSpec(spec: EnvironmentSpec): {
+export function summarizeSpec(
+  spec: EnvironmentSpec,
+  registry: RegistryTool[]
+): {
   toolCount: number;
   commandCount: number;
   ruleCount: number;
@@ -95,13 +98,13 @@ export function summarizeSpec(spec: EnvironmentSpec): {
   agentCount: number;
   pluginCommands: string[];
 } {
-  const pluginCommands = spec.tools
-    .map((t) => t.tool_id)
-    .filter((id) => {
-      // Check if this tool has a plugin_command in the registry
-      // We'll match against known plugin types
-      return false; // Will be populated by the describe command
-    });
+  const pluginCommands: string[] = [];
+  for (const selected of spec.tools) {
+    const tool = registry.find((t) => t.id === selected.tool_id);
+    if (tool?.install.plugin_command) {
+      pluginCommands.push(tool.install.plugin_command);
+    }
+  }
 
   return {
     toolCount: spec.tools.length,
