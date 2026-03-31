@@ -1,31 +1,12 @@
 import fs from "fs/promises";
 import path from "path";
-import { fileURLToPath } from "url";
 import crypto from "crypto";
 import Anthropic from "@anthropic-ai/sdk";
 import OpenAI from "openai";
 import { loadConfig, getEnvsDir, ensureDirs } from "../config.js";
 import { SYSTEM_PROMPT } from "./prompt.js";
+import { loadRegistry } from "../registry/loader.js";
 import type { EnvironmentSpec, RegistryTool, KairnConfig } from "../types.js";
-
-async function loadRegistry(): Promise<RegistryTool[]> {
-  const __filename = fileURLToPath(import.meta.url);
-  const __dirname = path.dirname(__filename);
-  const candidates = [
-    path.resolve(__dirname, "../registry/tools.json"),
-    path.resolve(__dirname, "../src/registry/tools.json"),
-    path.resolve(__dirname, "../../src/registry/tools.json"),
-  ];
-  for (const candidate of candidates) {
-    try {
-      const data = await fs.readFile(candidate, "utf-8");
-      return JSON.parse(data) as RegistryTool[];
-    } catch {
-      continue;
-    }
-  }
-  throw new Error("Could not find tools.json registry");
-}
 
 function buildUserMessage(intent: string, registry: RegistryTool[]): string {
   const registrySummary = registry

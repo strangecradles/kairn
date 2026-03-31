@@ -3,7 +3,6 @@ import { input, confirm, checkbox } from "@inquirer/prompts";
 import chalk from "chalk";
 import fs from "fs/promises";
 import path from "path";
-import { fileURLToPath } from "url";
 import { loadConfig } from "../config.js";
 import { compile } from "../compiler/compile.js";
 import {
@@ -11,6 +10,7 @@ import {
   summarizeSpec,
   buildFileMap,
 } from "../adapter/claude-code.js";
+import { loadRegistry } from "../registry/loader.js";
 import { scanProject } from "../scanner/scan.js";
 import type { ProjectProfile } from "../scanner/scan.js";
 import type { EnvironmentSpec, RegistryTool } from "../types.js";
@@ -83,25 +83,6 @@ async function generateDiff(
   }
 
   return results;
-}
-
-async function loadRegistry(): Promise<RegistryTool[]> {
-  const __filename = fileURLToPath(import.meta.url);
-  const __dirname = path.dirname(__filename);
-  const candidates = [
-    path.resolve(__dirname, "../registry/tools.json"),
-    path.resolve(__dirname, "../src/registry/tools.json"),
-    path.resolve(__dirname, "../../src/registry/tools.json"),
-  ];
-  for (const candidate of candidates) {
-    try {
-      const data = await fs.readFile(candidate, "utf-8");
-      return JSON.parse(data) as RegistryTool[];
-    } catch {
-      continue;
-    }
-  }
-  throw new Error("Could not find tools.json registry");
 }
 
 function buildProfileSummary(profile: ProjectProfile): string {

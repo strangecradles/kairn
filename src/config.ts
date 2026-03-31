@@ -6,6 +6,8 @@ import type { KairnConfig } from "./types.js";
 const KAIRN_DIR = path.join(os.homedir(), ".kairn");
 const CONFIG_PATH = path.join(KAIRN_DIR, "config.json");
 const ENVS_DIR = path.join(KAIRN_DIR, "envs");
+const TEMPLATES_DIR = path.join(KAIRN_DIR, "templates");
+const USER_REGISTRY_PATH = path.join(KAIRN_DIR, "user-registry.json");
 
 export function getKairnDir(): string {
   return KAIRN_DIR;
@@ -19,9 +21,18 @@ export function getEnvsDir(): string {
   return ENVS_DIR;
 }
 
+export function getTemplatesDir(): string {
+  return TEMPLATES_DIR;
+}
+
+export function getUserRegistryPath(): string {
+  return USER_REGISTRY_PATH;
+}
+
 export async function ensureDirs(): Promise<void> {
   await fs.mkdir(KAIRN_DIR, { recursive: true });
   await fs.mkdir(ENVS_DIR, { recursive: true });
+  await fs.mkdir(TEMPLATES_DIR, { recursive: true });
 }
 
 export async function loadConfig(): Promise<KairnConfig | null> {

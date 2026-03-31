@@ -1,32 +1,10 @@
 import { Command } from "commander";
 import { input, confirm } from "@inquirer/prompts";
 import chalk from "chalk";
-import fs from "fs/promises";
-import path from "path";
 import { loadConfig } from "../config.js";
 import { compile } from "../compiler/compile.js";
 import { writeEnvironment, summarizeSpec } from "../adapter/claude-code.js";
-import { fileURLToPath } from "url";
-import type { RegistryTool } from "../types.js";
-
-async function loadRegistry(): Promise<RegistryTool[]> {
-  const __filename = fileURLToPath(import.meta.url);
-  const __dirname = path.dirname(__filename);
-  const candidates = [
-    path.resolve(__dirname, "../registry/tools.json"),
-    path.resolve(__dirname, "../src/registry/tools.json"),
-    path.resolve(__dirname, "../../src/registry/tools.json"),
-  ];
-  for (const candidate of candidates) {
-    try {
-      const data = await fs.readFile(candidate, "utf-8");
-      return JSON.parse(data) as RegistryTool[];
-    } catch {
-      continue;
-    }
-  }
-  throw new Error("Could not find tools.json registry");
-}
+import { loadRegistry } from "../registry/loader.js";
 
 export const describeCommand = new Command("describe")
   .description("Describe your workflow and generate a Claude Code environment")
