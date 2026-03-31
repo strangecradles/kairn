@@ -1,142 +1,106 @@
-# /project:ralph — Ralph Loop for Kairn v2.0.0
+# /project:ralph — Feature-Agnostic Build Loop
 
-You are executing a Ralph loop to build Kairn v2.0.0 (Task Definition & Trace Infrastructure).
+Automated build loop that implements any Kairn feature from the ROADMAP using specialized subagents. Point it at a version and it does the rest.
 
-## First: READ THESE FILES
+## Input
 
-1. `PLAN-v2.0.md` — your step-by-step implementation plan (9 steps)
-2. `docs/design/v2.0-kairn-evolve.md` — the full design specification
-3. `src/commands/describe.ts` — existing command pattern to follow
-4. `src/ui.ts` — branded output helpers (ui.section, ui.success, ui.error)
-5. `src/types.ts` — existing type definitions to understand pattern
-6. `src/config.ts` — config loading pattern
+You need a `$version` (e.g., "v2.0.0"). Read it from the user's prompt.
 
-## EXECUTE THE RALPH LOOP
+## Phase 0: Orient
 
-For each of the 9 steps in `PLAN-v2.0.md`:
+1. Read `ROADMAP.md` — find the `$version` section, extract all checklist items
+2. Find the design doc: `docs/design/` — match on version number
+3. Read the design doc fully — understand scope, files to create, architecture
+4. Check git status — must be clean (no uncommitted changes)
+5. Create feature branch if not already on one: `git checkout -b feature/$version`
 
-1. **PLAN:** Read the step carefully. State what you will build.
-2. **BUILD:** Implement all files listed in that step. Follow existing patterns.
-3. **TEST:** Run `npm run build`. Fix any TypeScript errors. Run verification commands.
-4. **COMMIT:** `git add -A && git commit -m "v2.0: step N - description"`
-5. **NEXT:** Move to the next step.
+## Phase 1: Plan (spawn @architect)
 
-## CRITICAL IMPLEMENTATION RULES
+Invoke `@architect` with the target version:
 
-### TypeScript & Code Quality
-- Strict TypeScript: `npx tsc --noEmit` must pass with no errors
-- No `any` types. All types properly defined or imported from src/evolve/types.ts
-- Use async/await for all I/O operations
-- Wrap all async actions in try/catch blocks with user-friendly error messages
+> "Read ROADMAP.md and the design doc for $version. Produce a PLAN-$version.md with numbered implementation steps. Each step: what to build, files to create, dependencies, verification, commit message. Mark parallel-safe steps."
 
-### Imports & Modules
-- Use `.js` extensions in all imports (ESM compliance)
-- Use relative paths (e.g., `from './types.js'` not `from '@kairn/types'`)
-- Import types from `src/evolve/types.js` everywhere needed
+Save the output as `PLAN-$version.md` in the repo root.
+Commit: `git add PLAN-$version.md && git commit -m "plan: $version implementation plan"`
 
-### UI & Output
-- Import `ui` from `../ui.js`
-- Use `ui.section()` for headers
-- Use `ui.success()` for success messages
-- Use `ui.error()` for errors
-- Use `ui.info()` for informational text
-- Reference: `src/commands/describe.ts` for the pattern
+## Phase 2: Build (spawn @implementer per step)
 
-### Error Handling
-- Always wrap async actions in try/catch
-- Call `console.log(ui.error('message'))` on errors
-- Messages should be user-facing and actionable
-- Example pattern from describe.ts:
-  ```typescript
-  try {
-    const result = await someAsyncOperation();
-  } catch (err) {
-    console.log(ui.error('Failed to do X: ' + (err instanceof Error ? err.message : 'Unknown error')));
-    process.exit(1);
-  }
-  ```
+Read `PLAN-$version.md`. Execute steps in order, respecting dependencies.
 
-### File Structure
-- Each step creates specific files listed in PLAN-v2.0.md
-- Don't merge concerns (types go in types.ts, init logic in init.ts, etc.)
-- Follow the exact file paths given in the plan
+**For parallel-safe steps:** spawn multiple `@implementer` subagents simultaneously.
+**For sequential steps:** spawn one `@implementer` at a time, wait for completion.
 
-### Special Note for Step 8: CLI Commands Must Call Real Functions
-Step 8 (CLI Entry Point) is critical: the commands must **call actual functions**, not stubs.
+For each step (or group of parallel steps):
 
-- `kairn evolve init` → calls `createEvolveWorkspace()` and `writeTasksFile()` from init.ts
-- `kairn evolve baseline` → calls `snapshotBaseline()` from baseline.ts
-- `kairn evolve run` → calls `runTask()` from runner.ts
+1. Invoke `@implementer` with:
+   > "Execute step N from PLAN-$version.md. Read the plan, read the design doc at docs/design/v*.md for implementation details. Follow all coding standards. Build, verify, commit."
 
-All wrapped in try/catch with proper error handling.
+2. After each step completes, verify:
+   - `npm run build` passes
+   - The step's verification command passes
+   - The commit exists in git log
 
-### Step 9: CLI Integration
-Wire the `evolveCommand` into `src/cli.ts`:
-- Add import: `import { evolveCommand } from "./commands/evolve.js";`
-- Add to program: `program.addCommand(evolveCommand);`
+3. If a step fails to build: invoke `@debugger` with the error output.
 
-## VERIFICATION
+Continue until all steps in the plan are complete.
 
-After all 9 steps complete:
+## Phase 3: Quality Gate (spawn @reviewer)
 
-```bash
-npm run build
-# Should succeed in ~20ms
+After all steps complete:
 
-node dist/cli.js evolve --help
-# Should show: init, baseline, run subcommands
+Invoke `@reviewer`:
 
-node dist/cli.js evolve init --help
-# Should show init command help
+> "Review the implementation of $version. Check spec compliance against ROADMAP.md and the design doc. Check code quality of all new/modified files. Output a structured report."
 
-kairn evolve baseline --help
-kairn evolve run --help
-# Both should show help
-```
+Read the review output.
 
-## AFTER ALL STEPS
+## Phase 4: Fix Loop (if needed)
 
-When you finish all 9 steps and all tests pass, run:
+If the reviewer reports BLOCKERS or SHOULD-FIX issues:
 
-```bash
-git log --oneline -10
-# Should show 9 v2.0 step commits
-```
+1. Invoke `@debugger` with the review findings:
+   > "Fix these review issues: [paste findings]. Then run npm run build to verify."
 
-Then exit and report back to Hermes that the build is complete and ready for quality gates.
+2. After fixes, invoke `@reviewer` again to re-check.
 
-## KEY PATTERNS FROM EXISTING CODE
+3. Repeat until the reviewer returns VERDICT: PASS.
 
-### Async Command Action (from describe.ts)
-```typescript
-.action(async (intentArg: string | undefined, options: { yes?: boolean }) => {
-  try {
-    // Your logic here
-    console.log(ui.success('Done!'));
-  } catch (err) {
-    console.log(ui.error('Failed: ' + (err instanceof Error ? err.message : 'Unknown')));
-    process.exit(1);
-  }
-})
-```
+Maximum 3 fix rounds. If still failing after 3, stop and report to user.
 
-### Reading Files
-```typescript
-import fs from 'fs/promises';
-const content = await fs.readFile(path, 'utf-8');
-```
+## Phase 5: Finalize
 
-### Writing Files
-```typescript
-await fs.writeFile(path, content, 'utf-8');
-```
+1. Run full verification:
+   ```bash
+   npm run build
+   node dist/cli.js --help  # verify new commands appear
+   ```
 
-### Directory Operations
-```typescript
-await fs.mkdir(dir, { recursive: true });
-const entries = await fs.readdir(dir);
-```
+2. Report completion:
+   ```
+   ━━━ RALPH LOOP COMPLETE ━━━━━━━━━━━━━━━━━━━━━━
+   Version:    $version
+   Steps:      N completed
+   Commits:    N
+   Review:     PASS
+   
+   Ready for: ROADMAP update, CHANGELOG, version bump, PR
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   ```
 
-## START NOW
+## Subagent Reference
 
-Read PLAN-v2.0.md completely, then begin Step 1.
+| Agent | Role | When to spawn | Tools |
+|-------|------|---------------|-------|
+| `@architect` | Creates implementation plan from design doc | Phase 1 (once) | Read, Glob, Grep |
+| `@implementer` | Builds one step from the plan | Phase 2 (per step, parallel when safe) | Read, Write, Edit, Bash, Glob, Grep |
+| `@reviewer` | Checks spec compliance + code quality | Phase 3, Phase 4 (after fixes) | Read, Glob, Grep, Bash |
+| `@debugger` | Fixes build errors + review issues | Phase 2 (on failure), Phase 4 | Read, Write, Edit, Bash, Grep, Glob |
+| `@linter` | Fast static analysis | Phase 3 (via @reviewer) | Read, Bash |
+
+## Rules
+
+- Never skip the quality gate (Phase 3)
+- Parallel @implementer spawns only for steps marked `[parallel-safe]`
+- If `npm run build` fails at any point, stop and invoke @debugger before continuing
+- All commits use conventional format: `feat:`, `fix:`, `refactor:`, `test:`, `docs:`
+- Don't bump version or update ROADMAP/CHANGELOG — that's done by the overseer (Hermes)
