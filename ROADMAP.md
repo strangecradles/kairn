@@ -122,13 +122,13 @@ Each version milestone links to a detailed design doc in `docs/design/` with imp
 - [x] Retry visibility (⚠ warning when Pass 2 retries in concise mode)
 - [x] Final summary line ("Environment compiled in 37s")
 
-### v1.13.0 — Environment Bootstrapping ([design doc](docs/design/v1.13-environment-bootstrapping.md))
-- [ ] "First Turn Protocol" section in every generated CLAUDE.md (agent self-orients before working)
-- [ ] `/project:bootstrap` command for Level 1-2 (gather runtime, project files, git state in one shot)
-- [ ] SessionStart bootstrap hook for Level 3-4 (automatic environment snapshot injection)
-- [ ] Project-type-aware runtime checks (Node, Python, Rust, Go detected from Pass 1 skeleton)
-- [ ] `.env` key masking in bootstrap output (show `KEY=***`, never values)
-- [ ] Saves 2-5 wasted exploration turns per session
+### v1.13.0 ✅ — Environment Bootstrapping ([design doc](docs/design/v1.13-environment-bootstrapping.md))
+- [x] "First Turn Protocol" section in every generated CLAUDE.md (agent self-orients before working)
+- [x] `/project:bootstrap` command for Level 2+ (gather runtime, project files, git state in one shot)
+- [x] SessionStart bootstrap hook for Level 3-4 (automatic environment snapshot injection)
+- [x] Project-type-aware runtime checks (Node, Python, Rust, Go detected from CLAUDE.md tech stack)
+- [x] `.env` key masking in bootstrap output (show `KEY=***`, never values)
+- [x] Saves 2-5 wasted exploration turns per session
 
 ### v1.14.0 — Completion Verification ([design doc](docs/design/v1.14-completion-verification.md))
 - [ ] Completion Verification checklist injected into all orchestrating commands
