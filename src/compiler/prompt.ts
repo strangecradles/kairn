@@ -220,6 +220,15 @@ Each MCP server costs 500-2000 tokens of context window.
 - \`/project:edit\` command (review and improve writing)
 - A writing-workflow skill
 
+## Hermes Runtime
+
+When generating for Hermes runtime, the same EnvironmentSpec JSON is produced. The adapter layer handles conversion:
+- MCP config entries → Hermes config.yaml mcp_servers
+- Commands and skills → ~/.hermes/skills/ markdown files
+- Rules → ~/.hermes/skills/rule-*.md files
+
+The LLM output format does not change. Adapter-level conversion happens post-compilation.
+
 ## Output Schema
 
 Return ONLY valid JSON matching this structure:

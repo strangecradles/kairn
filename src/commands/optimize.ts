@@ -10,7 +10,9 @@ import {
   summarizeSpec,
   buildFileMap,
 } from "../adapter/claude-code.js";
+import { writeHermesEnvironment } from "../adapter/hermes-agent.js";
 import { loadRegistry } from "../registry/loader.js";
+import type { RuntimeTarget } from "../types.js";
 import { scanProject } from "../scanner/scan.js";
 import type { ProjectProfile } from "../scanner/scan.js";
 import type { EnvironmentSpec, RegistryTool } from "../types.js";
@@ -168,7 +170,8 @@ export const optimizeCommand = new Command("optimize")
   .option("-y, --yes", "Skip confirmation prompts")
   .option("--audit-only", "Only audit the existing harness, don't generate changes")
   .option("--diff", "Preview changes as a diff without writing")
-  .action(async (options: { yes?: boolean; auditOnly?: boolean; diff?: boolean }) => {
+  .option("--runtime <runtime>", "Target runtime (claude-code or hermes)", "claude-code")
+  .action(async (options: { yes?: boolean; auditOnly?: boolean; diff?: boolean; runtime?: string }) => {
     const config = await loadConfig();
     if (!config) {
       console.log(
@@ -337,38 +340,46 @@ export const optimizeCommand = new Command("optimize")
       }
     }
 
-    const written = await writeEnvironment(spec, targetDir);
+    const runtime = (options.runtime ?? "claude-code") as RuntimeTarget;
 
-    console.log(chalk.green("\n  ✓ Environment written\n"));
-    for (const file of written) {
-      console.log(chalk.dim(`    ${file}`));
-    }
+    if (runtime === "hermes") {
+      await writeHermesEnvironment(spec, registry);
+      console.log(chalk.green("\n  ✓ Environment written for Hermes\n"));
+      console.log(chalk.cyan("\n  Ready! Run ") + chalk.bold("hermes") + chalk.cyan(" to start.\n"));
+    } else {
+      const written = await writeEnvironment(spec, targetDir);
 
-    if (summary.envSetup.length > 0) {
-      console.log(chalk.yellow("\n  API keys needed (set these environment variables):\n"));
-      const seen = new Set<string>();
-      for (const env of summary.envSetup) {
-        if (seen.has(env.envVar)) continue;
-        seen.add(env.envVar);
-        console.log(chalk.bold(`    export ${env.envVar}="your-key-here"`));
-        console.log(chalk.dim(`      ${env.description}`));
-        if (env.signupUrl) {
-          console.log(chalk.dim(`      Get one at: ${env.signupUrl}`));
+      console.log(chalk.green("\n  ✓ Environment written\n"));
+      for (const file of written) {
+        console.log(chalk.dim(`    ${file}`));
+      }
+
+      if (summary.envSetup.length > 0) {
+        console.log(chalk.yellow("\n  API keys needed (set these environment variables):\n"));
+        const seen = new Set<string>();
+        for (const env of summary.envSetup) {
+          if (seen.has(env.envVar)) continue;
+          seen.add(env.envVar);
+          console.log(chalk.bold(`    export ${env.envVar}="your-key-here"`));
+          console.log(chalk.dim(`      ${env.description}`));
+          if (env.signupUrl) {
+            console.log(chalk.dim(`      Get one at: ${env.signupUrl}`));
+          }
+          console.log("");
         }
-        console.log("");
       }
-    }
 
-    if (summary.pluginCommands.length > 0) {
-      console.log(chalk.yellow("  Install plugins by running these in Claude Code:"));
-      for (const cmd of summary.pluginCommands) {
-        console.log(chalk.bold(`    ${cmd}`));
+      if (summary.pluginCommands.length > 0) {
+        console.log(chalk.yellow("  Install plugins by running these in Claude Code:"));
+        for (const cmd of summary.pluginCommands) {
+          console.log(chalk.bold(`    ${cmd}`));
+        }
       }
-    }
 
-    console.log(
-      chalk.cyan("\n  Ready! Run ") +
-        chalk.bold("claude") +
-        chalk.cyan(" to start.\n")
-    );
+      console.log(
+        chalk.cyan("\n  Ready! Run ") +
+          chalk.bold("claude") +
+          chalk.cyan(" to start.\n")
+      );
+    }
   });
