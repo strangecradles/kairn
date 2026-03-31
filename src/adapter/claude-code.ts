@@ -1,6 +1,7 @@
 import fs from "fs/promises";
 import path from "path";
 import type { EnvironmentSpec, RegistryTool } from "../types.js";
+import { applyAutonomyLevel } from "../autonomy.js";
 
 const STATUS_LINE = {
   command:
@@ -56,6 +57,9 @@ export function buildFileMap(
   spec: EnvironmentSpec,
   options?: { hasEnvVars?: boolean }
 ): Map<string, string> {
+  // Apply autonomy-level content before building file map
+  applyAutonomyLevel(spec);
+
   const files = new Map<string, string>();
 
   if (spec.harness.claude_md) {
@@ -108,6 +112,9 @@ export async function writeEnvironment(
   targetDir: string,
   options?: { hasEnvVars?: boolean }
 ): Promise<string[]> {
+  // Apply autonomy-level content before writing
+  applyAutonomyLevel(spec);
+
   const claudeDir = path.join(targetDir, ".claude");
   const written: string[] = [];
 
