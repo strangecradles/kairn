@@ -4,10 +4,10 @@ import crypto from "crypto";
 import Anthropic from "@anthropic-ai/sdk";
 import OpenAI from "openai";
 import { loadConfig, getEnvsDir, ensureDirs } from "../config.js";
-import { SYSTEM_PROMPT, CLARIFICATION_PROMPT } from "./prompt.js";
+import { SYSTEM_PROMPT, SKELETON_PROMPT, HARNESS_PROMPT, CLARIFICATION_PROMPT } from "./prompt.js";
 import { loadRegistry } from "../registry/loader.js";
 import { getProviderName, getBaseURL, getCheapModel } from "../providers.js";
-import type { EnvironmentSpec, RegistryTool, KairnConfig, Clarification } from "../types.js";
+import type { EnvironmentSpec, RegistryTool, KairnConfig, Clarification, SkeletonSpec, HarnessContent } from "../types.js";
 
 function buildUserMessage(intent: string, registry: RegistryTool[]): string {
   const registrySummary = registry
@@ -18,6 +18,25 @@ function buildUserMessage(intent: string, registry: RegistryTool[]): string {
     .join("\n");
 
   return `## User Intent\n\n${intent}\n\n## Available Tool Registry\n\n${registrySummary}\n\nGenerate the EnvironmentSpec JSON now.`;
+}
+
+function buildSkeletonMessage(intent: string, registry: RegistryTool[]): string {
+  const registrySummary = registry
+    .map(
+      (t) =>
+        `- ${t.id} (${t.type}, tier ${t.tier}, auth: ${t.auth}): ${t.description} [best_for: ${t.best_for.join(", ")}]`
+    )
+    .join("\n");
+
+  return `## User Intent\n\n${intent}\n\n## Available Tool Registry\n\n${registrySummary}\n\nGenerate the skeleton JSON now.`;
+}
+
+function buildHarnessMessage(intent: string, skeleton: SkeletonSpec, concise?: boolean): string {
+  const skeletonJson = JSON.stringify(skeleton, null, 2);
+  const conciseNote = concise
+    ? "\n\nIMPORTANT: Be concise. Maximum 80 lines for claude_md. Maximum 5 commands. Keep all content brief."
+    : "";
+  return `## User Intent\n\n${intent}\n\n## Project Skeleton\n\n${skeletonJson}\n\nGenerate the harness content JSON now.${conciseNote}`;
 }
 
 function parseSpecResponse(text: string): Omit<EnvironmentSpec, "id" | "intent" | "created_at"> {
@@ -39,6 +58,51 @@ function parseSpecResponse(text: string): Omit<EnvironmentSpec, "id" | "intent" 
     throw new Error(
       `Failed to parse LLM response as JSON: ${err instanceof Error ? err.message : String(err)}\n` +
       `Response started with: ${cleaned.slice(0, 200)}...`
+    );
+  }
+}
+
+function parseSkeletonResponse(text: string): SkeletonSpec {
+  let cleaned = text.trim();
+  if (cleaned.startsWith("```")) {
+    cleaned = cleaned.replace(/^```(?:json)?\n?/, "").replace(/\n?```$/, "");
+  }
+  const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
+  if (!jsonMatch) {
+    throw new Error("Pass 1 (skeleton) did not return valid JSON.");
+  }
+  try {
+    const parsed = JSON.parse(jsonMatch[0]);
+    // Validate required fields
+    if (!parsed.name || !parsed.tools || !Array.isArray(parsed.tools)) {
+      throw new Error("Skeleton missing required fields: name, tools");
+    }
+    return parsed as SkeletonSpec;
+  } catch (err) {
+    throw new Error(
+      `Failed to parse skeleton JSON: ${err instanceof Error ? err.message : String(err)}`
+    );
+  }
+}
+
+function parseHarnessResponse(text: string): HarnessContent {
+  let cleaned = text.trim();
+  if (cleaned.startsWith("```")) {
+    cleaned = cleaned.replace(/^```(?:json)?\n?/, "").replace(/\n?```$/, "");
+  }
+  const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
+  if (!jsonMatch) {
+    throw new Error("Pass 2 (harness) did not return valid JSON.");
+  }
+  try {
+    const parsed = JSON.parse(jsonMatch[0]);
+    if (!parsed.claude_md || !parsed.commands) {
+      throw new Error("Harness missing required fields: claude_md, commands");
+    }
+    return parsed as HarnessContent;
+  } catch (err) {
+    throw new Error(
+      `Failed to parse harness JSON: ${err instanceof Error ? err.message : String(err)}`
     );
   }
 }
@@ -90,7 +154,13 @@ function classifyError(err: unknown, provider: string): string {
   return `${provider} API error: ${msg}`;
 }
 
-async function callLLM(config: KairnConfig, userMessage: string): Promise<string> {
+async function callLLM(
+  config: KairnConfig,
+  userMessage: string,
+  options?: { maxTokens?: number; systemPrompt?: string }
+): Promise<string> {
+  const maxTokens = options?.maxTokens ?? 8192;
+  const systemPrompt = options?.systemPrompt ?? SYSTEM_PROMPT;
   const providerName = getProviderName(config.provider);
 
   if (config.provider === "anthropic") {
@@ -98,8 +168,8 @@ async function callLLM(config: KairnConfig, userMessage: string): Promise<string
     try {
       const response = await client.messages.create({
         model: config.model,
-        max_tokens: 8192,
-        system: SYSTEM_PROMPT,
+        max_tokens: maxTokens,
+        system: systemPrompt,
         messages: [{ role: "user", content: userMessage }],
       });
       const textBlock = response.content.find((block) => block.type === "text");
@@ -121,9 +191,9 @@ async function callLLM(config: KairnConfig, userMessage: string): Promise<string
   try {
     const response = await client.chat.completions.create({
       model: config.model,
-      max_tokens: 8192,
+      max_tokens: maxTokens,
       messages: [
-        { role: "system", content: SYSTEM_PROMPT },
+        { role: "system", content: systemPrompt },
         { role: "user", content: userMessage },
       ],
     });
@@ -135,6 +205,82 @@ async function callLLM(config: KairnConfig, userMessage: string): Promise<string
   } catch (err) {
     throw new Error(classifyError(err, providerName));
   }
+}
+
+function buildSettings(skeleton: SkeletonSpec, registry: RegistryTool[]): Record<string, unknown> {
+  const selectedTools = skeleton.tools
+    .map((t) => registry.find((r) => r.id === t.tool_id))
+    .filter(Boolean);
+
+  // Build permissions based on workflow type
+  const allow = ["Read", "Write", "Edit", "Bash(npm run *)", "Bash(npx *)"];
+  const deny = [
+    "Bash(rm -rf *)",
+    "Bash(curl * | sh)",
+    "Bash(wget * | sh)",
+    "Read(./.env)",
+    "Read(./secrets/**)",
+  ];
+
+  // Build hooks
+  const hooks: Record<string, unknown[]> = {
+    PreToolUse: [
+      {
+        matcher: "Bash",
+        hooks: [
+          {
+            type: "command",
+            command:
+              "CMD=$(cat | jq -r '.tool_input.command // empty') && echo \"$CMD\" | grep -qiE 'rm\\s+-rf\\s+/|DROP\\s+TABLE|curl.*\\|\\s*sh' && echo 'Blocked destructive command' >&2 && exit 2 || true",
+          },
+        ],
+      },
+    ],
+    PostCompact: [
+      {
+        matcher: "",
+        hooks: [
+          {
+            type: "prompt",
+            prompt:
+              "Re-read CLAUDE.md and docs/SPRINT.md (if it exists) to restore project context after compaction.",
+          },
+        ],
+      },
+    ],
+  };
+
+  // Add formatter hook if project uses common formatters
+  const techStack = skeleton.outline.tech_stack.map((t) => t.toLowerCase());
+  if (
+    techStack.some((t) => t.includes("typescript") || t.includes("javascript") || t.includes("react") || t.includes("next"))
+  ) {
+    hooks.PostToolUse = [
+      {
+        matcher: "Edit|Write",
+        hooks: [
+          {
+            type: "command",
+            command:
+              'FILE=$(cat | jq -r \'.tool_input.file_path // empty\') && [ -n "$FILE" ] && npx prettier --write "$FILE" 2>/dev/null || true',
+          },
+        ],
+      },
+    ];
+  }
+
+  return { permissions: { allow, deny }, hooks };
+}
+
+function buildMcpConfig(skeleton: SkeletonSpec, registry: RegistryTool[]): Record<string, unknown> {
+  const config: Record<string, unknown> = {};
+  for (const tool of skeleton.tools) {
+    const reg = registry.find((r) => r.id === tool.tool_id);
+    if (reg?.install.mcp_config) {
+      config[tool.tool_id] = reg.install.mcp_config;
+    }
+  }
+  return config;
 }
 
 function validateSpec(spec: EnvironmentSpec, onProgress?: (msg: string) => void): void {
@@ -172,19 +318,60 @@ export async function compile(
   onProgress?.("Loading tool registry...");
   const registry = await loadRegistry();
 
-  onProgress?.(`Compiling with ${config.provider} (${config.model})...`);
-  const userMessage = buildUserMessage(intent, registry);
-  const responseText = await callLLM(config, userMessage);
+  // Pass 1: Skeleton (tool selection + project outline)
+  onProgress?.("Analyzing workflow...");
+  const skeletonMsg = buildSkeletonMessage(intent, registry);
+  const skeletonText = await callLLM(config, skeletonMsg, {
+    maxTokens: 2048,
+    systemPrompt: SKELETON_PROMPT,
+  });
+  const skeleton = parseSkeletonResponse(skeletonText);
 
-  onProgress?.("Parsing environment spec...");
-  const parsed = parseSpecResponse(responseText);
+  // Pass 2: Harness content (CLAUDE.md + commands + rules + agents)
+  onProgress?.("Generating environment...");
+  const harnessMsg = buildHarnessMessage(intent, skeleton);
+  let harness: HarnessContent;
+  try {
+    const harnessText = await callLLM(config, harnessMsg, {
+      maxTokens: 8192,
+      systemPrompt: HARNESS_PROMPT,
+    });
+    harness = parseHarnessResponse(harnessText);
+  } catch {
+    // Retry with concise mode if Pass 2 fails (likely JSON truncation)
+    onProgress?.("Retrying with concise mode...");
+    const retryMsg = buildHarnessMessage(intent, skeleton, true);
+    const retryText = await callLLM(config, retryMsg, {
+      maxTokens: 8192,
+      systemPrompt: HARNESS_PROMPT,
+    });
+    harness = parseHarnessResponse(retryText);
+  }
 
+  // Pass 3: Settings + MCP config (deterministic, no LLM)
+  onProgress?.("Configuring tools...");
+  const settings = buildSettings(skeleton, registry);
+  const mcpConfig = buildMcpConfig(skeleton, registry);
+
+  // Assemble final EnvironmentSpec
   const spec: EnvironmentSpec = {
     id: `env_${crypto.randomUUID()}`,
     intent,
     created_at: new Date().toISOString(),
-    ...parsed,
-    autonomy_level: (parsed as Partial<EnvironmentSpec>).autonomy_level ?? 1,
+    name: skeleton.name,
+    description: skeleton.description,
+    autonomy_level: 1,
+    tools: skeleton.tools,
+    harness: {
+      claude_md: harness.claude_md,
+      settings,
+      mcp_config: mcpConfig,
+      commands: harness.commands,
+      rules: harness.rules,
+      skills: harness.skills ?? {},
+      agents: harness.agents ?? {},
+      docs: harness.docs,
+    },
   };
 
   validateSpec(spec, onProgress);
