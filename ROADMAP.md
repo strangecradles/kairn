@@ -59,6 +59,17 @@ Each version milestone links to a detailed design doc in `docs/design/` with imp
 - [x] `--no-color` flag for piping/CI
 - [x] Updated all commands with consistent visual design
 
+### v1.7.0 — Boris Cherny Patterns & Verification ([design doc](docs/design/v1.7-boris-patterns.md))
+- [ ] Verification section in CLAUDE.md template (concrete verify commands per project)
+- [ ] Known Gotchas section in CLAUDE.md template (living memory of mistakes)
+- [ ] `/project:spec` command (interview-based spec creation before coding)
+- [ ] `/project:prove` command (verify implementation with tests/diffs/evidence)
+- [ ] `/project:grill` command (adversarial code review)
+- [ ] `/project:reset` command (clean restart with accumulated knowledge)
+- [ ] Statusline config in settings.json (branch + task count)
+- [ ] Debugging guidance in CLAUDE.md ("paste raw errors, use subagents")
+- [ ] Git workflow guidance ("small commits, conventional format")
+
 ---
 
 ## v2.x — Hosted Compilation
