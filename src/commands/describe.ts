@@ -7,7 +7,7 @@ import { generateClarifications, compile } from "../compiler/compile.js";
 import { writeEnvironment, summarizeSpec } from "../adapter/claude-code.js";
 import { writeHermesEnvironment } from "../adapter/hermes-agent.js";
 import { loadRegistry } from "../registry/loader.js";
-import { ui } from "../ui.js";
+import { ui, createProgressRenderer, estimateTime } from "../ui.js";
 import { printFullBanner } from "../logo.js";
 import { collectAndWriteKeys, writeEmptyEnvFile } from "../secrets.js";
 import { autonomyLabel } from "../autonomy.js";
@@ -106,18 +106,21 @@ export const describeCommand = new Command("describe")
 
     // 6. Compilation
     console.log(ui.section("Compilation"));
+    const estimate = estimateTime(config.model, finalIntent);
+    console.log(chalk.dim(`  Estimated time: ${estimate} (${config.model})`));
+    console.log("");
 
-    const spinner = ora({ text: "Loading tool registry...", indent: 2 }).start();
+    const renderer = createProgressRenderer();
 
     let spec;
     try {
-      spec = await compile(finalIntent, (msg) => {
-        spinner.text = msg;
+      spec = await compile(finalIntent, (progress) => {
+        renderer.update(progress);
       });
       spec.autonomy_level = autonomyLevel;
-      spinner.succeed("Environment compiled");
+      renderer.finish();
     } catch (err) {
-      spinner.fail("Compilation failed");
+      renderer.fail(err);
       const msg = err instanceof Error ? err.message : String(err);
       console.log(chalk.red(`\n  ${msg}\n`));
       process.exit(1);

@@ -273,8 +273,8 @@ export const optimizeCommand = new Command("optimize")
     let spec;
     const spinner = ora({ text: "Compiling optimized environment...", indent: 2 }).start();
     try {
-      spec = await compile(intent, (msg) => {
-        spinner.text = msg;
+      spec = await compile(intent, (progress) => {
+        spinner.text = progress.message;
       });
       spinner.succeed("Environment compiled");
     } catch (err) {

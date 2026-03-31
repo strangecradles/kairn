@@ -7,7 +7,7 @@ import { loadConfig, getEnvsDir, ensureDirs } from "../config.js";
 import { SYSTEM_PROMPT, SKELETON_PROMPT, HARNESS_PROMPT, CLARIFICATION_PROMPT } from "./prompt.js";
 import { loadRegistry } from "../registry/loader.js";
 import { getProviderName, getBaseURL, getCheapModel } from "../providers.js";
-import type { EnvironmentSpec, RegistryTool, KairnConfig, Clarification, SkeletonSpec, HarnessContent } from "../types.js";
+import type { EnvironmentSpec, RegistryTool, KairnConfig, Clarification, SkeletonSpec, HarnessContent, CompileProgress } from "../types.js";
 
 function buildUserMessage(intent: string, registry: RegistryTool[]): string {
   const registrySummary = registry
@@ -283,7 +283,7 @@ function buildMcpConfig(skeleton: SkeletonSpec, registry: RegistryTool[]): Recor
   return config;
 }
 
-function validateSpec(spec: EnvironmentSpec, onProgress?: (msg: string) => void): void {
+function validateSpec(spec: EnvironmentSpec): string[] {
   const warnings: string[] = [];
 
   if (spec.tools.length > 8) {
@@ -301,34 +301,42 @@ function validateSpec(spec: EnvironmentSpec, onProgress?: (msg: string) => void)
     warnings.push(`${Object.keys(spec.harness.skills).length} skills (recommended: ≤3)`);
   }
 
-  for (const warning of warnings) {
-    onProgress?.(`⚠ ${warning}`);
-  }
+  return warnings;
 }
 
 export async function compile(
   intent: string,
-  onProgress?: (msg: string) => void
+  onProgress?: (progress: CompileProgress) => void
 ): Promise<EnvironmentSpec> {
+  const startTime = Date.now();
   const config = await loadConfig();
   if (!config) {
     throw new Error("No config found. Run `kairn init` first.");
   }
 
-  onProgress?.("Loading tool registry...");
+  // Registry
+  onProgress?.({ phase: 'registry', status: 'running', message: 'Loading tool registry...' });
   const registry = await loadRegistry();
+  onProgress?.({ phase: 'registry', status: 'success', message: 'Tool registry loaded', detail: `${registry.length} tools` });
 
   // Pass 1: Skeleton (tool selection + project outline)
-  onProgress?.("Analyzing workflow...");
+  onProgress?.({ phase: 'pass1', status: 'running', message: 'Pass 1: Analyzing workflow & selecting tools...' });
   const skeletonMsg = buildSkeletonMessage(intent, registry);
   const skeletonText = await callLLM(config, skeletonMsg, {
     maxTokens: 2048,
     systemPrompt: SKELETON_PROMPT,
   });
   const skeleton = parseSkeletonResponse(skeletonText);
+  const toolNames = skeleton.tools.map(t => t.tool_id).join(', ');
+  onProgress?.({
+    phase: 'pass1', status: 'success',
+    message: `Pass 1: Selected ${skeleton.tools.length} tools`,
+    detail: toolNames,
+    elapsed: (Date.now() - startTime) / 1000,
+  });
 
   // Pass 2: Harness content (CLAUDE.md + commands + rules + agents)
-  onProgress?.("Generating environment...");
+  onProgress?.({ phase: 'pass2', status: 'running', message: 'Pass 2: Generating CLAUDE.md, commands, agents...' });
   const harnessMsg = buildHarnessMessage(intent, skeleton);
   let harness: HarnessContent;
   try {
@@ -339,7 +347,7 @@ export async function compile(
     harness = parseHarnessResponse(harnessText);
   } catch {
     // Retry with concise mode if Pass 2 fails (likely JSON truncation)
-    onProgress?.("Retrying with concise mode...");
+    onProgress?.({ phase: 'pass2-retry', status: 'warning', message: 'Pass 2: Response too large, retrying in concise mode...' });
     const retryMsg = buildHarnessMessage(intent, skeleton, true);
     const retryText = await callLLM(config, retryMsg, {
       maxTokens: 8192,
@@ -347,11 +355,20 @@ export async function compile(
     });
     harness = parseHarnessResponse(retryText);
   }
+  const cmdCount = Object.keys(harness.commands).length;
+  const agentCount = Object.keys(harness.agents ?? {}).length;
+  const ruleCount = Object.keys(harness.rules).length;
+  onProgress?.({
+    phase: 'pass2', status: 'success',
+    message: `Pass 2: Generated ${cmdCount} commands, ${agentCount} agents, ${ruleCount} rules`,
+    elapsed: (Date.now() - startTime) / 1000,
+  });
 
   // Pass 3: Settings + MCP config (deterministic, no LLM)
-  onProgress?.("Configuring tools...");
+  onProgress?.({ phase: 'pass3', status: 'running', message: 'Pass 3: Configuring MCP servers & settings...' });
   const settings = buildSettings(skeleton, registry);
   const mcpConfig = buildMcpConfig(skeleton, registry);
+  onProgress?.({ phase: 'pass3', status: 'success', message: 'Pass 3: Configured MCP servers & settings' });
 
   // Assemble final EnvironmentSpec
   const spec: EnvironmentSpec = {
@@ -374,7 +391,13 @@ export async function compile(
     },
   };
 
-  validateSpec(spec, onProgress);
+  const warnings = validateSpec(spec);
+  for (const w of warnings) {
+    onProgress?.({ phase: 'done', status: 'warning', message: `⚠ ${w}` });
+  }
+
+  const totalElapsed = ((Date.now() - startTime) / 1000).toFixed(0);
+  onProgress?.({ phase: 'done', status: 'success', message: `Environment compiled in ${totalElapsed}s`, elapsed: (Date.now() - startTime) / 1000 });
 
   // Save to ~/.kairn/envs/
   await ensureDirs();

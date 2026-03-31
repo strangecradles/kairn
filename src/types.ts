@@ -69,6 +69,16 @@ export interface HarnessContent {
   docs: Record<string, string>;
 }
 
+/** Structured progress events emitted during compilation */
+export interface CompileProgress {
+  phase: 'registry' | 'pass1' | 'pass2' | 'pass2-retry' | 'pass3' | 'done';
+  status: 'running' | 'success' | 'warning' | 'error';
+  message: string;
+  detail?: string;
+  elapsed?: number;
+  estimate?: string;
+}
+
 export type RuntimeTarget = "claude-code" | "hermes";
 
 export interface Clarification {
