@@ -7,6 +7,23 @@ This project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [1.6.0] — 2026-03-30
+
+### Added
+- **Interactive clarification flow** — LLM generates 3-5 clarifying questions with suggested defaults before compilation, eliminating hallucinated project details
+- **`--quick` / `-q` flag** — Skip clarification questions for fast compilation (old behavior)
+- **Branded CLI output** — Maroon/warm stone color palette with block-character KAIRN wordmark logo
+- **`src/ui.ts` styling module** — Centralized `ui.*` functions for headers, sections, key-value pairs, tool display, env var setup, and error boxes
+- **`src/logo.ts`** — Full banner (wordmark + braille cairn art) and compact banner for all commands
+- **Ora spinner** — Animated progress spinner during compilation and scanning (replaces line-overwrite hack)
+- **Branded error display** — Error boxes with styled headers for all failure modes
+- **`--no-color` flag** — Global flag to disable colored output for piping/CI (also respects `NO_COLOR` env var)
+
+### Changed
+- **All 9 commands redesigned** — Consistent visual design with branded banners, section headers, key-value pairs, and styled status indicators across init, describe, optimize, list, activate, doctor, registry, templates, and update-registry
+
+---
+
 ## [1.5.0] — 2026-03-30
 
 ### Added
