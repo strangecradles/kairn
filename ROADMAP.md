@@ -31,12 +31,12 @@ Each version milestone links to a detailed design doc in `docs/design/` with imp
 - [x] Path-scoped rules with YAML frontmatter (api, testing, frontend)
 - [x] Hooks in settings.json (auto-format, block-destructive, protect-secrets)
 - [x] `/project:status` and `/project:fix` commands
-- [x] Expanded registry (28 tools: Sentry, Vercel, Docker, SQLite, Chrome DevTools, Stripe, Memory, E2B, GPT Researcher, Jira)
-- [x] Improved TDD skill with 3-phase isolation pattern
+- [x] Expanded registry (25-30 tools: Sentry, Vercel, Docker, SQLite, Chrome DevTools)
+- [x] Improved TDD skill with subagent isolation pattern
 
 ### v1.4.0 ✅ — Advanced Patterns ([design doc](docs/design/v1.4-advanced-patterns.md))
 - [x] Sprint contract pattern (`/project:sprint` — define acceptance criteria)
-- [x] Evaluator/tester agent (Playwright-based QA)
+- [x] Multi-agent QA pipeline (`@qa-orchestrator` → `@linter` + `@e2e-tester`)
 - [x] PostCompact hook for context re-injection
 - [x] Context budget enforcement in compilation prompt
 - [x] `kairn optimize --diff` — preview changes before writing
