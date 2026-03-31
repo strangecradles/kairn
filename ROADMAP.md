@@ -88,6 +88,17 @@ Each version milestone links to a detailed design doc in `docs/design/` with imp
 - [x] Workflow-specific loops (code, research, content, bug-fix)
 - [x] `@pm` agent (maintains roadmap, specs features, prioritizes, does NOT code)
 
+### v1.10.0 — Expanded Provider & Model Support ([design doc](docs/design/v1.10-expanded-providers.md))
+- [ ] xAI/Grok provider (Grok 4.1 Fast, Grok 4.20 — 2M context, $0.20/M)
+- [ ] DeepSeek provider (V3.2 Chat/Reasoner — cheapest at $0.28/M)
+- [ ] Mistral provider (Large 3, Codestral, Small 4 — open-weight)
+- [ ] Groq provider (Llama 4, DeepSeek R1, Qwen 3 — free tier)
+- [ ] Custom endpoint ("Other" — any OpenAI-compatible URL, local Ollama/LM Studio)
+- [ ] Updated Anthropic models (Sonnet 4.6, Opus 4.6, Haiku 4.5)
+- [ ] Updated OpenAI models (GPT-4.1, GPT-4.1 mini, o4-mini, GPT-5 mini)
+- [ ] Updated Google models (Gemini 3 Flash, Gemini 3.1 Pro, Gemini 2.5 Flash/Pro)
+- [ ] Cheap model routing for clarification step (Haiku/nano/flash regardless of compilation model)
+
 ---
 
 ## v2.x — Hosted Compilation
