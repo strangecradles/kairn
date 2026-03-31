@@ -1,10 +1,11 @@
-Read PLAN.md. Implement the next unfinished step.
+# Build and Verify
 
-1. Check what exists in src/ already
-2. Identify the next step from the plan
-3. Implement it fully — write all files for that step
-4. Run `npm run build` to verify compilation
-5. Update progress in this session
+Run the full build pipeline:
 
-Follow coding standards from CLAUDE.md strictly.
-Reference RESEARCH.md for tool registry data and Claude Code ecosystem details.
+!npm run build 2>&1
+
+!npm run typecheck 2>&1
+
+!npm run lint 2>&1
+
+If any step fails, fix the error before continuing. Do NOT skip failures.

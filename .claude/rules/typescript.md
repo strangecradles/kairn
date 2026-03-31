@@ -1,7 +1,13 @@
-- Use async/await, never callbacks
-- Use @inquirer/prompts (not the legacy inquirer package)
-- Use chalk for terminal colors
-- Errors: catch at command level, print friendly message, exit(1)
-- All file I/O via fs/promises
-- Use crypto.randomUUID() for IDs
-- Strict TypeScript — no `any` types unless absolutely necessary
+---
+paths:
+  - "src/**/*.ts"
+---
+# TypeScript Rules
+
+- strict mode always on — no `any` without explicit comment
+- Use `fs.promises` for all file I/O, never sync variants
+- Use `@inquirer/prompts` — never old `inquirer` package
+- ESM only: `import`/`export`, no `require()`
+- Error handling: catch at command boundary, log friendly message, `process.exit(1)`
+- All public functions must have explicit return types
+- Prefer `unknown` over `any` for parsed JSON

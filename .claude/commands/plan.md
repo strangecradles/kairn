@@ -1,6 +1,20 @@
-Read PLAN.md. Identify the next unfinished implementation step.
+# Plan Before Coding
 
-1. Check what files already exist in src/
-2. Compare against the plan
-3. Propose what to build next with a brief approach
-4. Do NOT start coding — just plan.
+Before writing any code, create a plan:
+
+1. Read current state:
+
+!cat docs/TODO.md 2>/dev/null
+!cat docs/SPRINT.md 2>/dev/null
+
+2. Check what exists:
+
+!find src/ -name '*.ts' | head -20
+
+3. Answer these before coding:
+   - What exactly needs to change?
+   - Which files are affected?
+   - What could break?
+   - What's the minimal change?
+
+4. Write the plan to docs/SPRINT.md and get confirmation before implementing.

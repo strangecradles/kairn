@@ -1,8 +1,25 @@
-You are the project guide. Summarize the development environment:
+# Kairn CLI — Environment Help
 
-1. Read CLAUDE.md and list the key coding standards
-2. Read PLAN.md and show current implementation progress
-3. List available /project: commands
-4. Show the project structure (src/ directory)
+This is the Kairn agent environment compiler project.
 
-Keep it concise — bullet points, no prose.
+## Available Commands
+- `/project:help` — this message
+- `/project:tasks` — view and update TODO.md
+- `/project:status` — live git status and recent commits
+- `/project:plan` — plan a feature before coding
+- `/project:build` — build and verify the project
+- `/project:test` — run tests and fix failures
+- `/project:review` — review staged changes
+- `/project:commit` — create a conventional commit
+- `/project:fix` — fix a specific issue by number
+- `/project:sprint` — define sprint acceptance criteria
+- `/project:spec` — interview-based spec creation
+- `/project:prove` — confidence-rated verification
+- `/project:grill` — adversarial code review
+- `/project:reset` — elegant restart using DECISIONS.md
+
+## Key Paths
+- `src/compiler/prompt.ts` — the system prompt Claude sees
+- `src/adapter/claude-code.ts` — EnvironmentSpec → file writer
+- `src/registry/tools.json` — tool catalog
+- `~/.kairn/envs/` — saved environments
