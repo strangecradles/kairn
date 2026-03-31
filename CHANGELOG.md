@@ -7,6 +7,25 @@ This project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [1.10.1] — 2026-03-31
+
+### Changed
+- **Multi-pass compilation pipeline** — `kairn describe` now compiles in 3 passes instead of 1 monolithic LLM call, fixing JSON truncation on complex prompts (biotech, k8s, ML, music production)
+  - **Pass 1 (Skeleton):** Tool selection + project outline, small JSON output (max_tokens: 2048)
+  - **Pass 2 (Harness):** CLAUDE.md + commands + rules + agents + docs (max_tokens: 8192)
+  - **Pass 3 (Settings):** settings.json + .mcp.json generated deterministically from registry (no LLM call)
+- **Split compilation prompts** — `SYSTEM_PROMPT` split into focused `SKELETON_PROMPT` and `HARNESS_PROMPT`, reducing per-call context size
+- **Retry logic** — Pass 2 automatically retries with concise mode if JSON parsing fails (max 80 lines CLAUDE.md, max 5 commands)
+
+### Added
+- `SkeletonSpec` and `HarnessContent` TypeScript interfaces for multi-pass pipeline
+- `buildSettings()` and `buildMcpConfig()` deterministic builders (no LLM needed for security rules, hooks, and MCP config)
+
+### Fixed
+- Complex prompts (biotech, k8s, ML training, music production) no longer crash with `Failed to parse LLM response as JSON` at position ~23000-26000
+
+---
+
 ## [1.10.0] — 2026-03-31
 
 ### Added
