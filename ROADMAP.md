@@ -99,6 +99,22 @@ Each version milestone links to a detailed design doc in `docs/design/` with imp
 - [ ] Updated Google models (Gemini 3 Flash, Gemini 3.1 Pro, Gemini 2.5 Flash/Pro)
 - [ ] Cheap model routing for clarification step (Haiku/nano/flash regardless of compilation model)
 
+### v1.11.0 — Claude Code Power Patterns ([design doc](docs/design/v1.11-claude-code-power-patterns.md))
+- [ ] `/project:ultraplan` — multi-agent deep planning (3 parallel explorers + 1 critique agent)
+- [ ] `/project:security` — security review with >80% confidence threshold, 5 vulnerability categories
+- [ ] `/project:batch` — parallel work orchestration (5-30 independent units, worktree isolation)
+- [ ] `/project:review` — PR code review via gh CLI
+- [ ] `/project:compact` — structured conversation summary for context continuity
+- [ ] `@explorer` agent — read-only codebase exploration specialist (fast, parallel tool calls)
+- [ ] `@verifier` agent — adversarial verification specialist ("try to break it, not confirm it works")
+- [ ] `@architect` agent — creates custom agent configurations from user requirements
+- [ ] `@security-monitor` agent — proactive safety layer for Level 3-4 autonomous environments
+- [ ] `@worker` agent — strict fork worker for batch parallel execution
+- [ ] Engineering Standards in CLAUDE.md (output efficiency, no premature abstractions, tool usage policy)
+- [ ] Git Safety rules in CLAUDE.md (no `git add .`, no amending, stage specific files)
+- [ ] Coordinator Precision rules for Level 3-4 multi-agent environments
+- [ ] Autonomy-gated generation (components enabled/disabled based on Level 1-4)
+
 ---
 
 ## v2.x — Hosted Compilation
