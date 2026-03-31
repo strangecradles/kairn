@@ -109,20 +109,11 @@ Each version milestone links to a detailed design doc in `docs/design/` with imp
 - [x] Fix: complex prompts (biotech, k8s, ML, music) no longer crash with JSON truncation
 
 ### v1.11.0 — Claude Code Power Patterns ([design doc](docs/design/v1.11-claude-code-power-patterns.md))
-- [ ] `/project:ultraplan` — multi-agent deep planning (3 parallel explorers + 1 critique agent)
-- [ ] `/project:security` — security review with >80% confidence threshold, 5 vulnerability categories
-- [ ] `/project:batch` — parallel work orchestration (5-30 independent units, worktree isolation)
-- [ ] `/project:review` — PR code review via gh CLI
-- [ ] `/project:compact` — structured conversation summary for context continuity
-- [ ] `@explorer` agent — read-only codebase exploration specialist (fast, parallel tool calls)
-- [ ] `@verifier` agent — adversarial verification specialist ("try to break it, not confirm it works")
-- [ ] `@architect` agent — creates custom agent configurations from user requirements
-- [ ] `@security-monitor` agent — proactive safety layer for Level 3-4 autonomous environments
-- [ ] `@worker` agent — strict fork worker for batch parallel execution
-- [ ] Engineering Standards in CLAUDE.md (output efficiency, no premature abstractions, tool usage policy)
-- [ ] Git Safety rules in CLAUDE.md (no `git add .`, no amending, stage specific files)
-- [ ] Coordinator Precision rules for Level 3-4 multi-agent environments
-- [ ] Autonomy-gated generation (components enabled/disabled based on Level 1-4)
+- [ ] `/project:develop` — full development pipeline orchestrating subagents for spec, plan, implement (TDD), verify, review, and automated doc updates. Replaces monolithic `/ship`.
+- [ ] Automated and disciplined documentation: `TODO.md` removed; `docs/SPRINT.md` for living spec/plan; `@doc-updater` agent for `DECISIONS.md` and `LEARNINGS.md`.
+- [ ] New agents: `@architect`, `@planner`, `@implementer`, `@fixer`, `@doc-updater` (orchestrated by `/develop`).
+- [ ] Integration of Claude Code power patterns: `/project:ultraplan`, `/project:security`, `/project:batch`, `/project:review`, `/project:compact` (now as building blocks for `/develop`).
+- [ ] Engineering Standards, Tool Usage Policy, Git Safety, Coordinator Precision, Deferred Tool Discovery principles embedded in CLAUDE.md.
 
 ---
 
