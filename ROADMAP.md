@@ -149,8 +149,9 @@ Each version milestone links to a detailed design doc in `docs/design/` with imp
 Full design doc: [`docs/design/v2.0-kairn-evolve.md`](docs/design/v2.0-kairn-evolve.md)
 
 ### v2.0.0 — Task Definition & Trace Infrastructure
-- [ ] `kairn evolve init` — scaffold an evolution workspace (`.kairn-evolve/`)
-- [ ] Task definition format (`tasks.yaml` — description, expected outcome, scoring rubric)
+- [ ] Eval template menu — 6 built-in templates (add-feature, fix-bug, refactor, test-writing, config-change, documentation)
+- [ ] Auto-generated evals — LLM reads `.claude/CLAUDE.md` + project structure, selects templates, generates 3-5 concrete project-specific tasks
+- [ ] `kairn evolve init` — scaffold evolution workspace (`.kairn-evolve/`), auto-generate `tasks.yaml`, interactive "add another eval?" flow
 - [ ] Baseline snapshot (`kairn evolve baseline`) — copy current `.claude/` as iteration 0
 - [ ] Task runner — execute agent on a single task, capture full trace to filesystem
 - [ ] Trace schema: `traces/{iteration}/{task_id}/` containing stdout, tool_calls.json, files_changed.json, score.json
@@ -189,6 +190,7 @@ Full design doc: [`docs/design/v2.0-kairn-evolve.md`](docs/design/v2.0-kairn-evo
 - [ ] Template evolution (evolve a template against its canonical tasks)
 - [ ] Export evolved environment as a new Kairn template
 - [ ] CI/CD integration guide (run `kairn evolve` in GitHub Actions)
+- [ ] User-authored custom evals — write tasks from scratch (not from templates), custom scoring scripts, arbitrary verification logic
 
 ---
 
