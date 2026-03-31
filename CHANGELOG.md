@@ -7,6 +7,24 @@ This project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [1.5.0] — 2026-03-30
+
+### Added
+- **Template gallery** — 4 curated pre-built environments (Next.js Full-Stack, API Service, Research, Content Writing) installed automatically on `kairn init`
+- **`kairn templates`** — Browse and filter available templates with `--category` and `--json` options
+- **`kairn activate` template fallback** — Activate templates by ID when not found in saved environments
+- **`kairn registry list`** — Browse all tools (bundled + user-defined) with `--category` and `--user-only` filtering
+- **`kairn registry add`** — Interactively add custom tool definitions to the user registry with validation
+- **User registry** — Custom tools stored in `~/.kairn/user-registry.json`, merged with bundled registry (user tools take precedence by ID)
+- **Hermes runtime adapter** — `--runtime hermes` flag on `describe` and `optimize` generates `~/.hermes/config.yaml` and `~/.hermes/skills/` from any EnvironmentSpec
+- **CONTRIBUTING.md** — Guide for community tool submissions via PR
+
+### Changed
+- **Registry loader refactored** — Deduplicated `loadRegistry()` from 3 files into shared `src/registry/loader.ts`
+- **Templates directory** — `~/.kairn/templates/` created automatically alongside envs directory
+
+---
+
 ## [1.4.0] — 2026-03-30
 
 ### Added

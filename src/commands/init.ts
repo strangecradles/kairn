@@ -4,8 +4,56 @@ import chalk from "chalk";
 import Anthropic from "@anthropic-ai/sdk";
 import OpenAI from "openai";
 import { execFileSync } from "child_process";
-import { loadConfig, saveConfig, getConfigPath } from "../config.js";
+import fs from "fs/promises";
+import path from "path";
+import { fileURLToPath } from "url";
+import { loadConfig, saveConfig, getConfigPath, getTemplatesDir } from "../config.js";
 import type { KairnConfig, LLMProvider } from "../types.js";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+async function installSeedTemplates(): Promise<void> {
+  const templatesDir = getTemplatesDir();
+  await fs.mkdir(templatesDir, { recursive: true });
+
+  const candidates = [
+    path.resolve(__dirname, "../registry/templates"),
+    path.resolve(__dirname, "../src/registry/templates"),
+    path.resolve(__dirname, "../../src/registry/templates"),
+  ];
+
+  let seedDir: string | null = null;
+  for (const candidate of candidates) {
+    try {
+      await fs.access(candidate);
+      seedDir = candidate;
+      break;
+    } catch {
+      continue;
+    }
+  }
+
+  if (!seedDir) return;
+
+  const files = (await fs.readdir(seedDir)).filter((f) => f.endsWith(".json"));
+  let installed = 0;
+
+  for (const file of files) {
+    const dest = path.join(templatesDir, file);
+    try {
+      await fs.access(dest);
+      // File already exists — don't overwrite user modifications
+    } catch {
+      await fs.copyFile(path.join(seedDir, file), dest);
+      installed++;
+    }
+  }
+
+  if (installed > 0) {
+    console.log(chalk.green(`  ✓ ${installed} template${installed === 1 ? "" : "s"} installed`));
+  }
+}
 
 const PROVIDER_MODELS: Record<LLMProvider, { name: string; models: { name: string; value: string }[] }> = {
   anthropic: {
@@ -146,6 +194,8 @@ export const initCommand = new Command("init")
     console.log(
       chalk.dim(`  ✓ Provider: ${providerInfo.name}, Model: ${model}`)
     );
+
+    await installSeedTemplates();
 
     const hasClaude = detectClaudeCode();
     if (hasClaude) {

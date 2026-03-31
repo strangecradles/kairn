@@ -32,6 +32,8 @@ export interface EnvironmentSpec {
   };
 }
 
+export type RuntimeTarget = "claude-code" | "hermes";
+
 export interface RegistryTool {
   id: string;
   name: string;
@@ -47,5 +49,9 @@ export interface RegistryTool {
     mcp_config?: Record<string, unknown>;
     plugin_command?: string;
     hook_config?: Record<string, unknown>;
+    hermes?: {
+      mcp_server?: Record<string, unknown>;
+      skill_file?: string;
+    };
   };
 }

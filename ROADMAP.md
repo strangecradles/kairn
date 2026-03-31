@@ -42,12 +42,12 @@ Each version milestone links to a detailed design doc in `docs/design/` with imp
 - [x] `kairn optimize --diff` — preview changes before writing
 - [x] `kairn doctor` — validate environments against Claude Code spec
 
-### v1.5.0 🔜 — Templates & Registry ([design doc](docs/design/v1.5-templates-registry.md))
-- [ ] Template gallery — pre-built environments (Next.js, API, Research, Content)
-- [ ] `kairn templates` — browse and activate templates
-- [ ] Registry management (`kairn registry list`, `kairn registry add`)
-- [ ] Community tool submissions
-- [ ] Hermes runtime adapter
+### v1.5.0 ✅ — Templates & Registry ([design doc](docs/design/v1.5-templates-registry.md))
+- [x] Template gallery — pre-built environments (Next.js, API, Research, Content)
+- [x] `kairn templates` — browse and activate templates
+- [x] Registry management (`kairn registry list`, `kairn registry add`)
+- [x] Community tool submissions
+- [x] Hermes runtime adapter
 
 ---
 
