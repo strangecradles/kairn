@@ -2,6 +2,28 @@ import fs from "fs/promises";
 import path from "path";
 import type { EnvironmentSpec, RegistryTool } from "../types.js";
 
+const STATUS_LINE = {
+  command:
+    "printf '%s | %s tasks' \"$(git branch --show-current 2>/dev/null || echo 'no-git')\" \"$(grep -c '\\- \\[ \\]' docs/TODO.md 2>/dev/null || echo 0)\"",
+};
+
+function isCodeProject(spec: EnvironmentSpec): boolean {
+  const commands = spec.harness.commands ?? {};
+  return "status" in commands || "test" in commands;
+}
+
+function resolveSettings(
+  spec: EnvironmentSpec
+): Record<string, unknown> | null {
+  const settings = spec.harness.settings;
+  if (!settings || Object.keys(settings).length === 0) return null;
+  if ("statusLine" in settings) return settings as Record<string, unknown>;
+  if (isCodeProject(spec)) {
+    return { ...(settings as Record<string, unknown>), statusLine: STATUS_LINE };
+  }
+  return settings as Record<string, unknown>;
+}
+
 async function writeFile(filePath: string, content: string): Promise<void> {
   await fs.mkdir(path.dirname(filePath), { recursive: true });
   await fs.writeFile(filePath, content, "utf-8");
@@ -13,11 +35,9 @@ export function buildFileMap(spec: EnvironmentSpec): Map<string, string> {
   if (spec.harness.claude_md) {
     files.set(".claude/CLAUDE.md", spec.harness.claude_md);
   }
-  if (spec.harness.settings && Object.keys(spec.harness.settings).length > 0) {
-    files.set(
-      ".claude/settings.json",
-      JSON.stringify(spec.harness.settings, null, 2)
-    );
+  const resolvedSettings = resolveSettings(spec);
+  if (resolvedSettings) {
+    files.set(".claude/settings.json", JSON.stringify(resolvedSettings, null, 2));
   }
   if (
     spec.harness.mcp_config &&
@@ -72,9 +92,10 @@ export async function writeEnvironment(
   }
 
   // 2. settings.json
-  if (spec.harness.settings && Object.keys(spec.harness.settings).length > 0) {
+  const resolvedSettings = resolveSettings(spec);
+  if (resolvedSettings) {
     const p = path.join(claudeDir, "settings.json");
-    await writeFile(p, JSON.stringify(spec.harness.settings, null, 2));
+    await writeFile(p, JSON.stringify(resolvedSettings, null, 2));
     written.push(".claude/settings.json");
   }
 

@@ -10,12 +10,12 @@ You must output a JSON object matching the EnvironmentSpec schema.
 
 - **Minimalism over completeness.** Fewer, well-chosen tools beat many generic ones. Each MCP server costs 500-2000 context tokens.
 - **Workflow-specific, not generic.** Every instruction, command, and rule must relate to the user's actual workflow.
-- **Concise CLAUDE.md.** Under 100 lines. No generic text like "be helpful." Include build/test commands, reference docs/ and skills/.
+- **Concise CLAUDE.md.** Under 120 lines. No generic text like "be helpful." Include build/test commands, reference docs/ and skills/.
 - **Security by default.** Always include deny rules for destructive commands and secret file access.
 
 ## CLAUDE.md Template (mandatory structure)
 
-The \`claude_md\` field MUST follow this exact structure (max 100 lines):
+The \`claude_md\` field MUST follow this exact structure (max 120 lines):
 
 \`\`\`
 # {Project Name}
@@ -40,6 +40,30 @@ The \`claude_md\` field MUST follow this exact structure (max 100 lines):
 
 ## Output
 {where results go, key files}
+
+## Verification
+After implementing any change, verify it works:
+- {build command} — must pass with no errors
+- {test command} — all tests must pass
+- {lint command} — no warnings or errors
+- {type check command} — no type errors
+
+If any verification step fails, fix the issue before moving on.
+Do NOT skip verification steps.
+
+## Known Gotchas
+<!-- After any correction, add it here: "Update CLAUDE.md so you don't make that mistake again." -->
+<!-- Prune this section when it exceeds 10 items — keep only the recurring ones. -->
+- (none yet — this section grows as you work)
+
+## Debugging
+When debugging, paste raw error output. Don't summarize — Claude works better with raw data.
+Use subagents for deep investigation to keep main context clean.
+
+## Git Workflow
+- Prefer small, focused commits (one feature or fix per commit)
+- Use conventional commits: feat:, fix:, docs:, refactor:, test:
+- Target < 200 lines per PR when possible
 \`\`\`
 
 Do not add generic filler. Every line must be specific to the user's workflow.
@@ -58,6 +82,10 @@ Do not add generic filler. Every line must be specific to the user's workflow.
 10. A \`/project:status\` command for code projects (uses ! for live git/test output)
 11. A \`/project:fix\` command for code projects (uses $ARGUMENTS for issue number)
 12. A \`docs/SPRINT.md\` file for sprint contracts (acceptance criteria, verification steps)
+13. A "Verification" section in CLAUDE.md with concrete verify commands for the project
+14. A "Known Gotchas" section in CLAUDE.md (starts empty, grows with corrections)
+15. A "Debugging" section in CLAUDE.md (2 lines: paste raw errors, use subagents)
+16. A "Git Workflow" section in CLAUDE.md (3 rules: small commits, conventional format, <200 lines PR)
 
 ## Shell-Integrated Commands
 
@@ -178,7 +206,7 @@ Merge this into the settings hooks alongside the PreToolUse and PostToolUse hook
 ## Context Budget (STRICT)
 
 - MCP servers: maximum 6. Prefer fewer.
-- CLAUDE.md: maximum 100 lines.
+- CLAUDE.md: maximum 120 lines.
 - Rules: maximum 5 files, each under 20 lines.
 - Skills: maximum 3. Only include directly relevant ones.
 - Agents: maximum 3. QA pipeline + one specialist.
@@ -206,6 +234,10 @@ Each MCP server costs 500-2000 tokens of context window.
   - \`@qa-orchestrator\` (sonnet) — delegates to linter and e2e-tester, compiles QA report
   - \`@linter\` (haiku) — runs formatters, linters, security scanners
   - \`@e2e-tester\` (sonnet, only when Playwright is in tools) — browser-based QA via Playwright
+- \`/project:spec\` command (interview-based spec creation — asks 5-8 questions one at a time, writes structured spec to docs/SPRINT.md, does NOT start coding until confirmed)
+- \`/project:prove\` command (runs tests, shows git diff vs main, rates confidence HIGH/MEDIUM/LOW with evidence)
+- \`/project:grill\` command (adversarial code review — challenges each change with "why this approach?", "what if X input?", rates BLOCKER/SHOULD-FIX/NITPICK, blocks until BLOCKERs resolved)
+- \`/project:reset\` command (reads DECISIONS.md and LEARNINGS.md, proposes clean restart, stashes current work, implements elegant solution)
 
 ## For Research Projects, Additionally Include
 
@@ -213,6 +245,7 @@ Each MCP server costs 500-2000 tokens of context window.
 - \`/project:summarize\` command (summarize findings)
 - A research-synthesis skill
 - A researcher agent
+- Note: the Verification section in CLAUDE.md should adapt for research — e.g. "Verify all sources are cited" instead of build/test commands
 
 ## For Content/Writing Projects, Additionally Include
 
@@ -241,7 +274,7 @@ Return ONLY valid JSON matching this structure:
     { "tool_id": "id-from-registry", "reason": "why this tool fits" }
   ],
   "harness": {
-    "claude_md": "The full CLAUDE.md content (under 100 lines)",
+    "claude_md": "The full CLAUDE.md content (under 120 lines)",
     "settings": {
       "permissions": {
         "allow": ["Bash(npm run *)", "Read", "Write", "Edit"],
@@ -256,7 +289,11 @@ Return ONLY valid JSON matching this structure:
       "tasks": "markdown content for /project:tasks",
       "status": "Show project status:\\n\\n!git status --short\\n\\n!git log --oneline -5\\n\\nRead TODO.md and summarize progress.",
       "fix": "Fix issue #$ARGUMENTS:\\n\\n1. Read the issue and understand the problem\\n2. Plan the fix\\n3. Implement the fix\\n4. Run tests:\\n\\n!npm test 2>&1 | tail -20\\n\\n5. Commit with: fix: resolve #$ARGUMENTS",
-      "sprint": "Define a sprint contract for the next feature:\\n\\n1. Read docs/TODO.md for context:\\n\\n!cat docs/TODO.md 2>/dev/null\\n\\n2. Write a CONTRACT to docs/SPRINT.md with: feature name, acceptance criteria, verification steps, files to modify, scope estimate.\\n3. Do NOT start coding until contract is confirmed."
+      "sprint": "Define a sprint contract for the next feature:\\n\\n1. Read docs/TODO.md for context:\\n\\n!cat docs/TODO.md 2>/dev/null\\n\\n2. Write a CONTRACT to docs/SPRINT.md with: feature name, acceptance criteria, verification steps, files to modify, scope estimate.\\n3. Do NOT start coding until contract is confirmed.",
+      "spec": "Before building this feature, interview me to create a complete spec.\\n\\nAsk me 5-8 questions, one at a time:\\n1. What specifically should this feature do?\\n2. Who uses it and how?\\n3. What are the edge cases or error states?\\n4. How will we know it works? (acceptance criteria)\\n5. What should it explicitly NOT do? (scope boundaries)\\n6. Any dependencies, APIs, or constraints?\\n7. How does it fit with existing code?\\n8. Priority: speed, quality, or flexibility?\\n\\nAfter my answers, write a structured spec to docs/SPRINT.md:\\n- Feature name\\n- Description (from my answers, not invented)\\n- Acceptance criteria (testable)\\n- Out of scope\\n- Technical approach\\n\\nDo NOT start coding until I confirm the spec.",
+      "prove": "Prove the current implementation works.\\n\\n1. Run the full test suite:\\n\\n!npm test 2>&1\\n\\n2. Compare against main:\\n\\n!git diff main --stat 2>/dev/null\\n\\n3. Show evidence:\\n   - Test results (pass/fail counts)\\n   - Behavioral diff (main vs this branch)\\n   - Edge cases tested\\n   - Error handling verified\\n\\n4. Rate confidence:\\n   - HIGH: All tests pass, edge cases covered, no regressions\\n   - MEDIUM: Core works, some edges untested\\n   - LOW: Needs more verification\\n\\nIf LOW or MEDIUM, explain what's missing and fix it.",
+      "grill": "Review the current changes adversarially.\\n\\n!git diff --staged 2>/dev/null || git diff HEAD 2>/dev/null\\n\\nAct as a senior engineer. For each file changed:\\n\\n1. \\\"Why this approach over X?\\\"\\n2. \\\"What happens if Y input?\\\"\\n3. \\\"Performance impact of Z?\\\"\\n4. \\\"This could break if...\\\"\\n\\nFor each concern:\\n- Severity: BLOCKER / SHOULD-FIX / NITPICK\\n- The exact scenario that could fail\\n- A suggested alternative\\n\\nDo NOT approve until all BLOCKERs are resolved.",
+      "reset": "Stop. Read docs/DECISIONS.md and docs/LEARNINGS.md.\\n\\nConsidering everything we've learned:\\n1. What was the original approach?\\n2. What went wrong or feels inelegant?\\n3. What would the clean solution look like?\\n\\nPropose the new approach. Do NOT implement yet.\\nIf I approve, stash current changes:\\n  git stash -m \\\"pre-reset: $(date +%Y%m%d-%H%M)\\\"\\n\\nThen implement the elegant solution."
     },
     "rules": {
       "continuity": "markdown content for continuity rule",
