@@ -279,7 +279,32 @@ Full design doc: [`docs/design/v2.0-kairn-evolve.md`](docs/design/v2.0-kairn-evo
 - [ ] The proposer reads prior run summaries before proposing — learns from history, not just current traces
 - [ ] This is the data flywheel: each run makes future runs smarter
 
-### v2.5.0 — Structured Harness IR
+### v2.5.0 — Intent-Aware Harnesses (Two-Tier Evolving Router)
+> "No commands to memorize, just describe what you want" — but project-specific, compiled from the codebase, and self-improving. Inspired by OMC's keyword detection but uses Claude Code's native prompt hooks for semantic fallback.
+
+Full design doc: [`docs/design/v2.5-intent-routing.md`](docs/design/v2.5-intent-routing.md)
+
+**Generation pipeline (kairn describe):**
+- [ ] Intent pattern compilation: each generated command → 1-3 regex patterns (name, synonyms, framework verbs)
+- [ ] Generate `.claude/hooks/intent-router.mjs` — Tier 1 regex engine with project-specific patterns
+- [ ] Generate Tier 2 prompt template — compiled workflow + agent manifest baked into `settings.json` prompt hook
+- [ ] Generate `.claude/hooks/intent-learner.mjs` — background pattern promotion (Tier 2 → Tier 1)
+- [ ] Write `UserPromptSubmit` + `SessionStart` hooks into `.claude/settings.json`
+- [ ] Extend `EnvironmentSpec.harness` with `hooks`, `intent_patterns`, `intent_prompt_template`
+
+**Evolution pipeline (kairn evolve):**
+- [ ] Proposer reads intent patterns + Tier 2 prompt as harness context
+- [ ] New mutation targets: `add_intent_pattern`, `modify_intent_prompt`
+- [ ] Harness snapshot/apply includes `.claude/hooks/` directory
+- [ ] New eval template: `intent-routing` — test that NL prompts route to correct commands
+
+**Self-learning (background, no CLI command):**
+- [ ] Tier 2 routings logged to `.claude/hooks/intent-log.jsonl`
+- [ ] `intent-learner.mjs` runs on `SessionStart`: promotes recurring Tier 2 patterns to Tier 1 regexes
+- [ ] Audit trail: `.claude/hooks/intent-promotions.jsonl`
+- [ ] Data flywheel: Run 1 (40% regex) → Run 10 (90% regex) — harness learns user vocabulary
+
+### v2.6.0 — Structured Harness IR
 > Raw Markdown mutation will corrupt formatting, accumulate contradictions, and break as files grow. A structured intermediate representation makes mutations composable, diffing meaningful, and format migration tractable.
 
 - [ ] Harness IR: typed data model for CLAUDE.md sections, commands, rules, agents, settings
@@ -288,7 +313,7 @@ Full design doc: [`docs/design/v2.0-kairn-evolve.md`](docs/design/v2.0-kairn-evo
 - [ ] Diff engine compares IR trees, not string patches
 - [ ] Migration path: parse existing .claude/ → IR → re-render (format upgrade for free)
 
-### v2.6.0 — Polish & Integration
+### v2.7.0 — Polish & Integration
 - [ ] `kairn evolve watch` — live dashboard during evolution (progress, scores, current mutation)
 - [ ] Integration with `kairn describe` ("generate, then auto-evolve for 3 iterations")
 - [ ] Integration with `kairn optimize` ("audit, then evolve the fixes")
@@ -311,7 +336,7 @@ The "harness" is bigger than `.claude/`. Today Kairn manages instructions and MC
 - `.claude/` — instructions, commands, rules, agents, settings.json
 - `.mcp.json` — MCP server configurations
 
-**Near-term expansion (v2.5+):**
+**Near-term expansion (v2.6+):**
 - `.claude/plugins/` — Claude Code plugin configs
 - Tool API key connections (`.env` with Sentry, Vercel, etc. keys)
 - The proposer should be able to suggest "add Sentry MCP server" as a mutation
