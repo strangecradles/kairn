@@ -183,9 +183,9 @@ evolveCommand
           timeout: 300,
         };
 
-        const score = await runTask(task, harnessPath, traceDir, task.description);
-        const status = score.pass ? chalk.green('PASS') : chalk.red('FAIL');
-        console.log(`    ${status}  ${taskId}${score.details ? chalk.dim(` — ${score.details}`) : ''}`);
+        const result = await runTask(task, harnessPath, traceDir, 0);
+        const status = result.score.pass ? chalk.green('PASS') : chalk.red('FAIL');
+        console.log(`    ${status}  ${taskId}${result.score.details ? chalk.dim(` — ${result.score.details}`) : ''}`);
       }
 
       console.log('');
