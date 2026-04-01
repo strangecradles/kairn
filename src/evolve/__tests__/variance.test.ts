@@ -5,8 +5,6 @@ import { evaluateAll } from '../runner.js';
 import type { Task, Score, LoopProgressEvent } from '../types.js';
 import type { KairnConfig } from '../../types.js';
 
-// Mock scoreTask and writeScore (different modules from runner.js)
-// but keep the real evaluateAll + runTask with a fake claude binary
 vi.mock('../scorers.js', () => ({
   scoreTask: vi.fn(),
 }));

@@ -346,18 +346,6 @@ export function parseToolCalls(stdout: string): unknown[] {
 }
 
 /**
- * Run all tasks against a harness and return aggregated results.
- *
- * Each task is run sequentially via `runTask`, scored (optionally via
- * `scoreTask` when a `KairnConfig` is provided), and its score written
- * to the trace directory.
- *
- * The aggregate score is the arithmetic mean of all task scores.
- * For scores that have a numeric `score` field, that value is used directly.
- * For pass/fail scores without a numeric value, `pass=true` counts as 100
- * and `pass=false` counts as 0.
- */
-/**
  * Compute population standard deviation for a list of numbers.
  *
  * Uses population stddev (divide by N) rather than sample stddev (divide by N-1).
@@ -371,6 +359,18 @@ function computeStddev(values: number[], mean: number): number {
   return Math.sqrt(sumSqDiffs / values.length);
 }
 
+/**
+ * Run all tasks against a harness and return aggregated results.
+ *
+ * Each task is run sequentially via `runTask`, scored (optionally via
+ * `scoreTask` when a `KairnConfig` is provided), and its score written
+ * to the trace directory.
+ *
+ * The aggregate score is the arithmetic mean of all task scores.
+ * For scores that have a numeric `score` field, that value is used directly.
+ * For pass/fail scores without a numeric value, `pass=true` counts as 100
+ * and `pass=false` counts as 0.
+ */
 export async function evaluateAll(
   tasks: Task[],
   harnessPath: string,
@@ -388,7 +388,6 @@ export async function evaluateAll(
     onProgress?.({ type: 'task-start', iteration, taskId: task.id });
 
     if (effectiveRuns > 1 && config) {
-      // Multi-run mode: run the task N times and compute variance
       const runScores: number[] = [];
       let passCount = 0;
 
@@ -422,7 +421,6 @@ export async function evaluateAll(
         if (score.pass) passCount++;
       }
 
-      // Compute mean and stddev
       const mean = runScores.reduce((a, b) => a + b, 0) / runScores.length;
       const stddev = computeStddev(runScores, mean);
 
@@ -438,7 +436,6 @@ export async function evaluateAll(
         },
       };
     } else {
-      // Single-run mode (original behavior)
       const traceDir = path.join(
         workspacePath,
         'traces',
@@ -472,7 +469,6 @@ export async function evaluateAll(
     });
   }
 
-  // Aggregate: average of all scores (pass-fail counted as 0 or 100)
   const scores = Object.values(results);
   const total = scores.reduce(
     (sum, s) => sum + (s.score ?? (s.pass ? 100 : 0)),

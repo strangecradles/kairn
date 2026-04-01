@@ -210,7 +210,6 @@ evolveCommand
         process.exit(1);
       }
 
-      // Parse tasks.yaml with yaml package
       const tasksPath = path.join(workspace, 'tasks.yaml');
       let tasksContent: string;
       try {
@@ -226,9 +225,7 @@ evolveCommand
         process.exit(1);
       }
 
-      // Decision: --task means single-task mode, otherwise full evolution loop
       if (options.task) {
-        // --- Single task mode (existing behavior) ---
         const tasksToRun = parsed.tasks.filter(t => t.id === options.task);
 
         if (tasksToRun.length === 0) {
@@ -272,7 +269,6 @@ evolveCommand
         console.log(ui.info(`Results: ${passed}/${results.length} passed`));
         console.log(ui.info('Traces written to .kairn-evolve/traces/0/'));
       } else {
-        // --- Full evolution loop mode ---
         const kairnConfig = await loadConfig();
         if (!kairnConfig) {
           console.log(ui.error('No config found. Run kairn init first.'));
@@ -302,7 +298,6 @@ evolveCommand
           process.exit(1);
         }
 
-        // Run evolution with progress callback
         const result = await evolve(workspace, parsed.tasks, kairnConfig, evolveConfig, (event: LoopProgressEvent) => {
           switch (event.type) {
             case 'iteration-start':

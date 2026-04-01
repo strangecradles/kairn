@@ -26,12 +26,11 @@ async function listIterations(workspacePath: string): Promise<number[]> {
   for (const entry of entries) {
     const n = parseInt(entry, 10);
     if (!isNaN(n)) {
-      // Verify it has a harness subdirectory
       try {
         await fs.access(path.join(iterationsDir, entry, 'harness'));
         nums.push(n);
       } catch {
-        // No harness — skip
+        // skip entries without a harness directory
       }
     }
   }
@@ -110,7 +109,6 @@ export async function applyEvolution(
     throw new Error('No iterations found in workspace. Run `kairn evolve run` first.');
   }
 
-  // Determine which iteration to apply
   let iter: number;
   if (targetIteration !== undefined) {
     if (!iterations.includes(targetIteration)) {
@@ -131,10 +129,8 @@ export async function applyEvolution(
   );
   const claudeDir = path.join(projectRoot, '.claude');
 
-  // Generate diff preview before overwriting
   const diffPreview = await generateDiff(claudeDir, harnessPath);
 
-  // Compute actual delta: files that differ between current .claude/ and target harness
   const currentFiles = await listFilesRecursive(claudeDir);
   const targetFiles = await listFilesRecursive(harnessPath);
   const allPaths = new Set([...currentFiles, ...targetFiles]);
@@ -147,7 +143,6 @@ export async function applyEvolution(
     }
   }
 
-  // Replace .claude/ with the target harness
   await fs.rm(claudeDir, { recursive: true, force: true });
   await copyDir(harnessPath, claudeDir);
 

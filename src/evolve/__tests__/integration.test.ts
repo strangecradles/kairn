@@ -19,10 +19,6 @@ import type {
   Mutation,
 } from '../types.js';
 
-// ---------------------------------------------------------------------------
-// Mocks — isolate the loop from I/O and LLM calls
-// ---------------------------------------------------------------------------
-
 vi.mock('../runner.js', () => ({
   evaluateAll: vi.fn(),
 }));
@@ -54,10 +50,6 @@ const mockPropose = vi.mocked(propose);
 const mockApplyMutations = vi.mocked(applyMutations);
 const mockWriteIterationLog = vi.mocked(writeIterationLog);
 const mockCopyDir = vi.mocked(copyDir);
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
 
 function makeKairnConfig(): KairnConfig {
   return {
@@ -136,10 +128,6 @@ async function createWorkspace(iterations: number[]): Promise<string> {
   }
   return workspace;
 }
-
-// ---------------------------------------------------------------------------
-// Integration tests
-// ---------------------------------------------------------------------------
 
 describe('Evolution loop integration', () => {
   it('full loop: baseline → propose → mutate → re-evaluate → score improves', async () => {
