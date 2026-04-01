@@ -73,6 +73,7 @@ export async function evolve(
       workspacePath,
       iter,
       kairnConfig,
+      onProgress,
     );
     onProgress?.({ type: 'iteration-scored', iteration: iter, score: aggregate });
 
@@ -164,8 +165,14 @@ export async function evolve(
         kairnConfig,
         evolveConfig.proposerModel,
       );
-    } catch {
-      // Proposer failed — copy current harness forward unchanged
+    } catch (err) {
+      // Proposer failed — log the error and copy current harness forward unchanged
+      const errMsg = err instanceof Error ? err.message : String(err);
+      onProgress?.({
+        type: 'proposer-error',
+        iteration: iter,
+        message: `Proposer failed: ${errMsg}`,
+      });
       const nextIterDir = path.join(
         workspacePath,
         'iterations',

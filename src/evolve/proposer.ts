@@ -57,7 +57,10 @@ Return a JSON object:
 Return ONLY valid JSON.`;
 
 /** Maximum characters of stdout to include per trace in the prompt. */
-const STDOUT_TRUNCATION_LIMIT = 2000;
+const STDOUT_TRUNCATION_LIMIT = 1000;
+
+/** Maximum total characters for the proposer user message. */
+const MAX_CONTEXT_CHARS = 100_000;
 
 /**
  * Recursively read all files in a harness directory.
@@ -199,7 +202,14 @@ export function buildProposerUserMessage(
     }
   }
 
-  return sections.join('\n');
+  let message = sections.join('\n');
+
+  // Truncate if total context exceeds limit to avoid token overflow
+  if (message.length > MAX_CONTEXT_CHARS) {
+    message = message.slice(0, MAX_CONTEXT_CHARS) + '\n\n[...context truncated to fit token limit...]';
+  }
+
+  return message;
 }
 
 /**

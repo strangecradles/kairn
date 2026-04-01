@@ -1,5 +1,5 @@
 // Eval templates
-export type EvalTemplate = 'add-feature' | 'fix-bug' | 'refactor' | 'test-writing' | 'config-change' | 'documentation';
+export type EvalTemplate = 'add-feature' | 'fix-bug' | 'refactor' | 'test-writing' | 'config-change' | 'documentation' | 'convention-adherence' | 'workflow-compliance' | 'rule-compliance';
 
 // Rubric criterion for scored evaluations
 export interface RubricCriterion {
@@ -188,9 +188,10 @@ export interface EvolutionReport {
 
 // Progress events emitted during the evolution loop
 export interface LoopProgressEvent {
-  type: 'iteration-start' | 'iteration-scored' | 'rollback' | 'proposing' | 'mutations-applied' | 'perfect-score' | 'complete';
+  type: 'iteration-start' | 'iteration-scored' | 'rollback' | 'proposing' | 'proposer-error' | 'mutations-applied' | 'perfect-score' | 'task-start' | 'task-scored' | 'complete';
   iteration: number;
   score?: number;
   mutationCount?: number;
   message?: string;
+  taskId?: string;
 }
