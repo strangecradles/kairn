@@ -287,6 +287,9 @@ export async function compile(
       skills: harness.skills ?? {},
       agents: harness.agents ?? {},
       docs: harness.docs,
+      hooks: harness.hooks ?? {},
+      intent_patterns: [],
+      intent_prompt_template: '',
     },
   };
 

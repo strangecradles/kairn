@@ -1,3 +1,5 @@
+import type { IntentPattern } from './intent/types.js';
+
 export type LLMProvider =
   | "anthropic"
   | "openai"
@@ -44,6 +46,9 @@ export interface EnvironmentSpec {
     skills: Record<string, string>;
     agents: Record<string, string>;
     docs: Record<string, string>;
+    hooks: Record<string, string>;
+    intent_patterns: IntentPattern[];
+    intent_prompt_template: string;
   };
 }
 
@@ -70,6 +75,7 @@ export interface HarnessContent {
   agents: Record<string, string>;
   skills: Record<string, string>;
   docs: Record<string, string>;
+  hooks: Record<string, string>;
 }
 
 /** Structured progress events emitted during compilation */
