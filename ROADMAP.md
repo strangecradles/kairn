@@ -254,6 +254,30 @@ Full design doc: [`docs/design/v2.0-kairn-evolve.md`](docs/design/v2.0-kairn-evo
 
 > These are directional ideas, not committed milestones. They depend on v2.x proving its thesis (evolved > static with rigor) and on finding a monetization trigger.
 
+### Broad Harness Scope (v2.x → v3.x evolution)
+The "harness" is bigger than `.claude/`. Today Kairn manages instructions and MCP configs. The full harness includes everything that shapes agent behavior:
+
+**Current scope (v2.x):**
+- `.claude/` — instructions, commands, rules, agents, settings.json
+- `.mcp.json` — MCP server configurations
+
+**Near-term expansion (v2.5+):**
+- `.claude/plugins/` — Claude Code plugin configs
+- Tool API key connections (`.env` with Sentry, Vercel, etc. keys)
+- The proposer should be able to suggest "add Sentry MCP server" as a mutation
+
+**Runtime-agnostic scope (v3.x / Hermes / OpenClaw):**
+- Runtime-specific configs (`.hermes/config.yaml`, OpenClaw equivalents)
+- API-authenticated external tool connections (not just local MCP)
+- Plugin/extension configs per runtime
+- The evolution loop operates on a runtime-agnostic harness IR, adapters write runtime-specific files
+
+### Paid Tool Connections & Micropayments
+When the proposer discovers that adding an external tool (Sentry, Datadog, a paid MCP server) would improve task scores, the user needs a way to connect and pay:
+- **BYOK (Bring Your Own Key):** User provides API keys for tools the proposer suggests — current model, works today
+- **Stripe MPP / x402 micropayments:** "This mutation adds Sentry monitoring. Connect for $0.02/query?" — proposer-initiated tool acquisition with per-use billing
+- **Tool marketplace with metered billing:** Browse, connect, and pay for tool access within Kairn — the evolution loop becomes a discovery mechanism for useful tools
+
 ### Harness Generator Quality
 - Upgrade agent template quality (learn from OMC's agent design patterns: role scoping, `disallowedTools`, `<Why_This_Matters>`, model tiering)
 - Generate per-environment **WORKFLOWS.md** walkthrough (context-aware, regenerated after evolve)
@@ -265,7 +289,7 @@ Full design doc: [`docs/design/v2.0-kairn-evolve.md`](docs/design/v2.0-kairn-evo
 ### Hosted Platform
 - Free hosted compilation endpoint (requires: auth, multi-tenancy, trace privacy, abuse prevention, uptime)
 - Web dashboard, template marketplace
-- Payments integration (Stripe MPP, BYOK)
+- Payments integration (Stripe MPP, BYOK, x402)
 
 ### Learning System
 - Automated tool discovery (GitHub, npm, community)

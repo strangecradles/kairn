@@ -146,6 +146,21 @@ export async function applyEvolution(
   await fs.rm(claudeDir, { recursive: true, force: true });
   await copyDir(harnessPath, claudeDir);
 
+  // Copy .mcp.json from harness if it exists (harness scope includes MCP config)
+  const harnessMcpJson = path.join(harnessPath, '.mcp.json');
+  const projectMcpJson = path.join(projectRoot, '.mcp.json');
+  try {
+    await fs.access(harnessMcpJson);
+    const currentMcp = await fs.readFile(projectMcpJson, 'utf-8').catch(() => null);
+    const targetMcp = await fs.readFile(harnessMcpJson, 'utf-8').catch(() => null);
+    if (currentMcp !== targetMcp) {
+      filesChanged.push('.mcp.json');
+    }
+    await fs.copyFile(harnessMcpJson, projectMcpJson);
+  } catch {
+    // No .mcp.json in harness — leave project's .mcp.json untouched
+  }
+
   return {
     iteration: iter,
     filesChanged,
