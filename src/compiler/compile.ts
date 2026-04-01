@@ -1,13 +1,12 @@
 import fs from "fs/promises";
 import path from "path";
 import crypto from "crypto";
-import Anthropic from "@anthropic-ai/sdk";
-import OpenAI from "openai";
 import { loadConfig, getEnvsDir, ensureDirs } from "../config.js";
 import { SYSTEM_PROMPT, SKELETON_PROMPT, HARNESS_PROMPT, CLARIFICATION_PROMPT } from "./prompt.js";
 import { loadRegistry } from "../registry/loader.js";
-import { getProviderName, getBaseURL, getCheapModel } from "../providers.js";
-import type { EnvironmentSpec, RegistryTool, KairnConfig, Clarification, SkeletonSpec, HarnessContent, CompileProgress } from "../types.js";
+import { getCheapModel } from "../providers.js";
+import { callLLM } from "../llm.js";
+import type { EnvironmentSpec, RegistryTool, Clarification, SkeletonSpec, HarnessContent, CompileProgress } from "../types.js";
 
 function buildUserMessage(intent: string, registry: RegistryTool[]): string {
   const registrySummary = registry
@@ -104,106 +103,6 @@ function parseHarnessResponse(text: string): HarnessContent {
     throw new Error(
       `Failed to parse harness JSON: ${err instanceof Error ? err.message : String(err)}`
     );
-  }
-}
-
-function classifyError(err: unknown, provider: string): string {
-  const msg = err instanceof Error ? err.message : String(err);
-  const status = (err as { status?: number })?.status;
-  const code = (err as { code?: string })?.code;
-
-  // Network errors
-  if (code === "ECONNREFUSED" || code === "ENOTFOUND" || code === "ETIMEDOUT") {
-    return `Network error: could not reach ${provider} API. Check your internet connection.`;
-  }
-
-  // Auth errors
-  if (status === 401 || msg.includes("invalid") && msg.includes("key")) {
-    return `Invalid API key for ${provider}. Run \`kairn init\` to reconfigure.`;
-  }
-  if (status === 403) {
-    return `Access denied by ${provider}. Your API key may lack permissions for this model.`;
-  }
-
-  // Rate limiting
-  if (status === 429 || msg.includes("rate limit") || msg.includes("quota")) {
-    return `Rate limited by ${provider}. Wait a moment and try again, or switch to a cheaper model with \`kairn init\`.`;
-  }
-
-  // Model errors
-  if (status === 404 || msg.includes("not found") || msg.includes("does not exist")) {
-    return `Model not found on ${provider}. Run \`kairn init\` to select a valid model.`;
-  }
-
-  // Overloaded
-  if (status === 529 || status === 503 || msg.includes("overloaded")) {
-    return `${provider} is temporarily overloaded. Try again in a few seconds.`;
-  }
-
-  // Token/context limit
-  if (msg.includes("token") && (msg.includes("limit") || msg.includes("exceed"))) {
-    return `Request too large for the selected model. Try a shorter workflow description.`;
-  }
-
-  // Billing
-  if (msg.includes("billing") || msg.includes("payment") || msg.includes("insufficient")) {
-    return `Billing issue with your ${provider} account. Check your account dashboard.`;
-  }
-
-  // Fallback
-  return `${provider} API error: ${msg}`;
-}
-
-async function callLLM(
-  config: KairnConfig,
-  userMessage: string,
-  options?: { maxTokens?: number; systemPrompt?: string }
-): Promise<string> {
-  const maxTokens = options?.maxTokens ?? 8192;
-  const systemPrompt = options?.systemPrompt ?? SYSTEM_PROMPT;
-  const providerName = getProviderName(config.provider);
-
-  if (config.provider === "anthropic") {
-    const client = new Anthropic({ apiKey: config.api_key });
-    try {
-      const response = await client.messages.create({
-        model: config.model,
-        max_tokens: maxTokens,
-        system: systemPrompt,
-        messages: [{ role: "user", content: userMessage }],
-      });
-      const textBlock = response.content.find((block) => block.type === "text");
-      if (!textBlock || textBlock.type !== "text") {
-        throw new Error("No text response from compiler LLM");
-      }
-      return textBlock.text;
-    } catch (err) {
-      throw new Error(classifyError(err, providerName));
-    }
-  }
-
-  // All other providers use OpenAI-compatible API
-  const resolvedBaseURL = getBaseURL(config.provider, config.base_url);
-  const clientOptions: { apiKey: string; baseURL?: string } = { apiKey: config.api_key };
-  if (resolvedBaseURL) clientOptions.baseURL = resolvedBaseURL;
-
-  const client = new OpenAI(clientOptions);
-  try {
-    const response = await client.chat.completions.create({
-      model: config.model,
-      max_tokens: maxTokens,
-      messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: userMessage },
-      ],
-    });
-    const text = response.choices[0]?.message?.content;
-    if (!text) {
-      throw new Error("No text response from compiler LLM");
-    }
-    return text;
-  } catch (err) {
-    throw new Error(classifyError(err, providerName));
   }
 }
 
@@ -422,7 +321,9 @@ export async function generateClarifications(
   const clarificationConfig = { ...config };
   clarificationConfig.model = getCheapModel(config.provider, config.model);
 
-  const response = await callLLM(clarificationConfig, CLARIFICATION_PROMPT + "\n\nUser description: " + intent);
+  const response = await callLLM(clarificationConfig, CLARIFICATION_PROMPT + "\n\nUser description: " + intent, {
+    systemPrompt: SYSTEM_PROMPT,
+  });
 
   try {
     let cleaned = response.trim();
