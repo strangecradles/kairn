@@ -50,6 +50,9 @@ function makeEvolveConfig(overrides: Partial<EvolveConfig> = {}): EvolveConfig {
     maxIterations: 3,
     parallelTasks: 1,
     runsPerTask: 1,
+    maxMutationsPerIteration: 3,
+    pruneThreshold: 95,
+    maxTaskDrop: 20,
     ...overrides,
   };
 }
@@ -845,5 +848,287 @@ describe('evolve', () => {
     expect(skippedEvents).toHaveLength(1);
     expect(skippedEvents[0].taskId).toBe('perfect');
     expect(skippedEvents[0].iteration).toBe(1);
+  });
+
+  it('truncates proposal mutations to maxMutationsPerIteration', async () => {
+    const workspace = await createWorkspace([0, 1]);
+    const tasks = [makeTask('task-1')];
+
+    mockEvaluateAll.mockResolvedValueOnce({
+      results: { 'task-1': { pass: false, score: 60 } },
+      aggregate: 60,
+    });
+
+    // Proposer returns 6 mutations
+    mockPropose.mockResolvedValueOnce({
+      reasoning: 'Many changes',
+      mutations: [
+        { file: 'CLAUDE.md', action: 'add_section', newText: 'a', rationale: '1' },
+        { file: 'CLAUDE.md', action: 'add_section', newText: 'b', rationale: '2' },
+        { file: 'CLAUDE.md', action: 'add_section', newText: 'c', rationale: '3' },
+        { file: 'CLAUDE.md', action: 'add_section', newText: 'd', rationale: '4' },
+        { file: 'CLAUDE.md', action: 'add_section', newText: 'e', rationale: '5' },
+        { file: 'CLAUDE.md', action: 'add_section', newText: 'f', rationale: '6' },
+      ],
+      expectedImpact: {},
+    });
+    mockApplyMutations.mockResolvedValueOnce({
+      newHarnessPath: path.join(workspace, 'iterations', '1', 'harness'),
+      diffPatch: 'diff',
+    });
+
+    mockEvaluateAll.mockResolvedValueOnce({
+      results: { 'task-1': { pass: true, score: 80 } },
+      aggregate: 80,
+    });
+
+    await evolve(
+      workspace,
+      tasks,
+      makeKairnConfig(),
+      makeEvolveConfig({ maxIterations: 2, maxMutationsPerIteration: 2 }),
+    );
+
+    // applyMutations should receive only 2 mutations (capped from 6)
+    const mutationsArg = mockApplyMutations.mock.calls[0][2];
+    expect(mutationsArg).toHaveLength(2);
+  });
+
+  it('proposal with fewer mutations than cap passes through unchanged', async () => {
+    const workspace = await createWorkspace([0, 1]);
+    const tasks = [makeTask('task-1')];
+
+    mockEvaluateAll.mockResolvedValueOnce({
+      results: { 'task-1': { pass: false, score: 60 } },
+      aggregate: 60,
+    });
+
+    mockPropose.mockResolvedValueOnce(makeProposal());
+    mockApplyMutations.mockResolvedValueOnce({
+      newHarnessPath: path.join(workspace, 'iterations', '1', 'harness'),
+      diffPatch: 'diff',
+    });
+
+    mockEvaluateAll.mockResolvedValueOnce({
+      results: { 'task-1': { pass: true, score: 80 } },
+      aggregate: 80,
+    });
+
+    await evolve(
+      workspace,
+      tasks,
+      makeKairnConfig(),
+      makeEvolveConfig({ maxIterations: 2, maxMutationsPerIteration: 5 }),
+    );
+
+    // 1 mutation from makeProposal, cap is 5 — no truncation
+    const mutationsArg = mockApplyMutations.mock.calls[0][2];
+    expect(mutationsArg).toHaveLength(1);
+  });
+
+  it('skips tasks at configurable pruneThreshold (not just 100)', async () => {
+    const workspace = await createWorkspace([0, 1, 2]);
+    const tasks = [makeTask('high-scorer'), makeTask('low-scorer')];
+    const proposal = makeProposal();
+
+    // Iteration 0: high-scorer=96, low-scorer=50
+    mockEvaluateAll.mockResolvedValueOnce({
+      results: {
+        'high-scorer': { pass: true, score: 96 },
+        'low-scorer': { pass: false, score: 50 },
+      },
+      aggregate: 73,
+    });
+    mockPropose.mockResolvedValueOnce(proposal);
+    mockApplyMutations.mockResolvedValueOnce({
+      newHarnessPath: path.join(workspace, 'iterations', '1', 'harness'),
+      diffPatch: 'diff',
+    });
+
+    // Iteration 1 (middle): high-scorer should be skipped at threshold 95
+    mockEvaluateAll.mockImplementationOnce(async (tasksArg) => {
+      expect(tasksArg).toHaveLength(1);
+      expect(tasksArg[0].id).toBe('low-scorer');
+      return {
+        results: { 'low-scorer': { pass: true, score: 70 } },
+        aggregate: 70,
+      };
+    });
+    mockPropose.mockResolvedValueOnce(proposal);
+    mockApplyMutations.mockResolvedValueOnce({
+      newHarnessPath: path.join(workspace, 'iterations', '2', 'harness'),
+      diffPatch: 'diff',
+    });
+
+    // Iteration 2 (last): all tasks run
+    mockEvaluateAll.mockResolvedValueOnce({
+      results: {
+        'high-scorer': { pass: true, score: 96 },
+        'low-scorer': { pass: true, score: 75 },
+      },
+      aggregate: 85.5,
+    });
+
+    await evolve(
+      workspace,
+      tasks,
+      makeKairnConfig(),
+      makeEvolveConfig({ maxIterations: 3, pruneThreshold: 95 }),
+    );
+
+    // Middle iteration aggregate includes carried-forward 96 for high-scorer
+    expect(mockWriteIterationLog.mock.calls[1][1].score).toBe(83); // (96 + 70) / 2
+  });
+
+  it('does NOT skip task scoring 94% when pruneThreshold is 95', async () => {
+    const workspace = await createWorkspace([0, 1, 2]);
+    const tasks = [makeTask('almost-there'), makeTask('low')];
+    const proposal = makeProposal();
+
+    // Iteration 0: almost-there=94, low=50
+    mockEvaluateAll.mockResolvedValueOnce({
+      results: {
+        'almost-there': { pass: true, score: 94 },
+        'low': { pass: false, score: 50 },
+      },
+      aggregate: 72,
+    });
+    mockPropose.mockResolvedValueOnce(proposal);
+    mockApplyMutations.mockResolvedValueOnce({
+      newHarnessPath: path.join(workspace, 'iterations', '1', 'harness'),
+      diffPatch: 'diff',
+    });
+
+    // Iteration 1 (middle): both should run since 94 < 95 threshold
+    mockEvaluateAll.mockImplementationOnce(async (tasksArg) => {
+      expect(tasksArg).toHaveLength(2);
+      return {
+        results: {
+          'almost-there': { pass: true, score: 95 },
+          'low': { pass: true, score: 60 },
+        },
+        aggregate: 77.5,
+      };
+    });
+    mockPropose.mockResolvedValueOnce(proposal);
+    mockApplyMutations.mockResolvedValueOnce({
+      newHarnessPath: path.join(workspace, 'iterations', '2', 'harness'),
+      diffPatch: 'diff',
+    });
+
+    // Iteration 2 (last)
+    mockEvaluateAll.mockResolvedValueOnce({
+      results: {
+        'almost-there': { pass: true, score: 96 },
+        'low': { pass: true, score: 70 },
+      },
+      aggregate: 83,
+    });
+
+    await evolve(
+      workspace,
+      tasks,
+      makeKairnConfig(),
+      makeEvolveConfig({ maxIterations: 3, pruneThreshold: 95 }),
+    );
+
+    expect(mockEvaluateAll).toHaveBeenCalledTimes(3);
+  });
+
+  it('rolls back when a single task drops more than maxTaskDrop even if aggregate improves', async () => {
+    const workspace = await createWorkspace([0, 1, 2]);
+    const tasks = [makeTask('task-a'), makeTask('task-b')];
+    const proposal = makeProposal();
+
+    // Iteration 0: task-a=50, task-b=80 → aggregate 65
+    mockEvaluateAll.mockResolvedValueOnce({
+      results: {
+        'task-a': { pass: false, score: 50 },
+        'task-b': { pass: true, score: 80 },
+      },
+      aggregate: 65,
+    });
+    mockPropose.mockResolvedValueOnce(proposal);
+    mockApplyMutations.mockResolvedValueOnce({
+      newHarnessPath: path.join(workspace, 'iterations', '1', 'harness'),
+      diffPatch: 'diff',
+    });
+
+    // Iteration 1: task-a=90 (+40!), task-b=55 (-25!) → aggregate 72.5 (improved!)
+    // But task-b dropped 25 points which exceeds maxTaskDrop=20
+    mockEvaluateAll.mockResolvedValueOnce({
+      results: {
+        'task-a': { pass: true, score: 90 },
+        'task-b': { pass: false, score: 55 },
+      },
+      aggregate: 72.5,
+    });
+
+    // Iteration 2: after rollback
+    mockEvaluateAll.mockResolvedValueOnce({
+      results: {
+        'task-a': { pass: false, score: 55 },
+        'task-b': { pass: true, score: 80 },
+      },
+      aggregate: 67.5,
+    });
+
+    const events: LoopProgressEvent[] = [];
+    const result = await evolve(
+      workspace,
+      tasks,
+      makeKairnConfig(),
+      makeEvolveConfig({ maxIterations: 3, maxTaskDrop: 20 }),
+      (event) => events.push(event),
+    );
+
+    // Rollback was triggered despite aggregate improving (65 → 72.5)
+    const regressionEvents = events.filter(e => e.type === 'task-regression');
+    expect(regressionEvents).toHaveLength(1);
+    expect(regressionEvents[0].taskId).toBe('task-b');
+
+    const rollbackEvents = events.filter(e => e.type === 'rollback');
+    expect(rollbackEvents).toHaveLength(1);
+    expect(rollbackEvents[0].iteration).toBe(1);
+  });
+
+  it('does NOT roll back when task drops within maxTaskDrop limit', async () => {
+    const workspace = await createWorkspace([0, 1]);
+    const tasks = [makeTask('task-a'), makeTask('task-b')];
+    const proposal = makeProposal();
+
+    // Iteration 0: task-a=50, task-b=80
+    mockEvaluateAll.mockResolvedValueOnce({
+      results: {
+        'task-a': { pass: false, score: 50 },
+        'task-b': { pass: true, score: 80 },
+      },
+      aggregate: 65,
+    });
+    mockPropose.mockResolvedValueOnce(proposal);
+    mockApplyMutations.mockResolvedValueOnce({
+      newHarnessPath: path.join(workspace, 'iterations', '1', 'harness'),
+      diffPatch: 'diff',
+    });
+
+    // Iteration 1: task-a=85 (+35), task-b=65 (-15) → within maxTaskDrop=20
+    mockEvaluateAll.mockResolvedValueOnce({
+      results: {
+        'task-a': { pass: true, score: 85 },
+        'task-b': { pass: true, score: 65 },
+      },
+      aggregate: 75,
+    });
+
+    const result = await evolve(
+      workspace,
+      tasks,
+      makeKairnConfig(),
+      makeEvolveConfig({ maxIterations: 2, maxTaskDrop: 20 }),
+    );
+
+    // No rollback — aggregate improved and no task dropped >20
+    expect(result.bestScore).toBe(75);
+    expect(result.bestIteration).toBe(1);
   });
 });

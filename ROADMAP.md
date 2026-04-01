@@ -207,7 +207,24 @@ Full design doc: [`docs/design/v2.0-kairn-evolve.md`](docs/design/v2.0-kairn-evo
 - [x] `runWithConcurrency` utility with configurable concurrency limit
 - [x] Backward compatible: `--parallel 1` (default) = sequential, identical to prior behavior
 
-### v2.3.0 — Eval Quality & Measurement Rigor [NEXT]
+### v2.2.8 — Optimization Controls [NEXT]
+> The evolution loop works but is noisy — too many mutations cause regressions, easy evals waste tokens, the proposer doesn't focus on what matters. These are the "learning rate, loss function, and batch strategy" of harness evolution.
+
+**Mutation control (learning rate):**
+- [ ] `maxMutationsPerIteration` in EvolveConfig (default: 3) — cap how many mutations the proposer can apply per step. 6 mutations caused a catastrophic regression (99% → 80%); 2-3 targeted mutations are more stable.
+- [ ] Proposer prompt enforces the cap: "Propose at most N mutations, prioritize by expected impact"
+
+**Loss-weighted proposer focus (hard example mining):**
+- [ ] Sort traces by score ascending in `buildProposerUserMessage` — low-scoring tasks get more context budget
+- [ ] Proposer naturally focuses on what's broken instead of over-optimizing what's already passing
+
+**Configurable pruning threshold:**
+- [ ] `pruneThreshold` in EvolveConfig (default: 95) — skip tasks scoring above this on middle iterations (currently hardcoded at 100). A task at 96% isn't providing meaningful signal given LLM-as-judge noise.
+
+**Per-task regression guard (PPO clipping):**
+- [ ] In addition to aggregate rollback, roll back if ANY single task drops more than `maxTaskDrop` points (default: 20). Prevents the proposer from sacrificing one task to boost another.
+
+### v2.3.0 — Eval Quality & Measurement Rigor
 > The evolution loop is only as good as its eval signal. Before adding features, make measurement trustworthy.
 
 **Eval Quality (the bottleneck):**
@@ -229,7 +246,30 @@ Full design doc: [`docs/design/v2.0-kairn-evolve.md`](docs/design/v2.0-kairn-evo
 - [ ] Capture tool calls & MCP usage from runner output → tool_calls.json
 - [ ] Harness utilization metrics (which tools/agents/rules were used vs available)
 
-### v2.4.0 — Structured Harness IR
+### v2.4.0 — Intelligent Evolution (RL-inspired)
+> The evolution loop is a text-space optimization algorithm. These features make it behave more like a proper optimizer: mini-batch sampling, meta-learning, exploration scheduling.
+
+**Principal Proposer (meta-learner):**
+- [ ] After N-1 normal iterations, a separate "Principal" LLM call reads ALL iteration logs (proposals, diffs, score deltas, rollback reasons) and synthesizes a single best harness from the baseline
+- [ ] Different system prompt: "You are reviewing the entire evolution run. Cherry-pick the best mutations, avoid regressions, synthesize the optimal harness."
+- [ ] Evaluated as the final iteration with full eval suite — the intelligent distillation of the entire run's learnings
+
+**Mini-batch eval sampling (stochastic gradient):**
+- [ ] Maintain a pool of 10-15 evals. Each iteration samples K (e.g., 5). Different subsets cycle through.
+- [ ] Implicit regularization: can't overfit to one subset. Broader coverage over many iterations.
+- [ ] Inspired by mini-batch SGD — see different "angles" of the harness each step.
+
+**Exploration/exploitation schedule:**
+- [ ] Early iterations: higher mutation cap, bolder changes, diverse eval samples (exploration)
+- [ ] Late iterations: lower mutation cap, conservative refinements, full eval sweep (exploitation)
+- [ ] Like epsilon-greedy with decay, or learning rate warmup → cosine annealing
+
+**Experience replay (cross-run learning):**
+- [ ] Persist a "proposer memory" of what mutations worked/failed across multiple `evolve run` sessions
+- [ ] The proposer reads prior run summaries before proposing — learns from history, not just current traces
+- [ ] This is the data flywheel: each run makes future runs smarter
+
+### v2.5.0 — Structured Harness IR
 > Raw Markdown mutation will corrupt formatting, accumulate contradictions, and break as files grow. A structured intermediate representation makes mutations composable, diffing meaningful, and format migration tractable.
 
 - [ ] Harness IR: typed data model for CLAUDE.md sections, commands, rules, agents, settings
@@ -238,7 +278,7 @@ Full design doc: [`docs/design/v2.0-kairn-evolve.md`](docs/design/v2.0-kairn-evo
 - [ ] Diff engine compares IR trees, not string patches
 - [ ] Migration path: parse existing .claude/ → IR → re-render (format upgrade for free)
 
-### v2.5.0 — Polish & Integration
+### v2.6.0 — Polish & Integration
 - [ ] `kairn evolve watch` — live dashboard during evolution (progress, scores, current mutation)
 - [ ] Integration with `kairn describe` ("generate, then auto-evolve for 3 iterations")
 - [ ] Integration with `kairn optimize` ("audit, then evolve the fixes")

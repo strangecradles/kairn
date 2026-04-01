@@ -26,6 +26,9 @@ const DEFAULT_CONFIG: EvolveConfig = {
   maxIterations: 5,
   parallelTasks: 1,
   runsPerTask: 1,
+  maxMutationsPerIteration: 3,
+  pruneThreshold: 95,
+  maxTaskDrop: 20,
 };
 
 /**
@@ -43,6 +46,9 @@ export async function loadEvolveConfigFromWorkspace(workspacePath: string): Prom
       maxIterations: (parsed.max_iterations as number) ?? DEFAULT_CONFIG.maxIterations,
       parallelTasks: (parsed.parallel_tasks as number) ?? DEFAULT_CONFIG.parallelTasks,
       runsPerTask: (parsed.runs_per_task as number) ?? DEFAULT_CONFIG.runsPerTask,
+      maxMutationsPerIteration: (parsed.max_mutations_per_iteration as number) ?? DEFAULT_CONFIG.maxMutationsPerIteration,
+      pruneThreshold: (parsed.prune_threshold as number) ?? DEFAULT_CONFIG.pruneThreshold,
+      maxTaskDrop: (parsed.max_task_drop as number) ?? DEFAULT_CONFIG.maxTaskDrop,
     };
   } catch {
     return { ...DEFAULT_CONFIG };
@@ -196,7 +202,10 @@ evolveCommand
   .option('--iterations <n>', 'Number of evolution iterations', '5')
   .option('--runs <n>', 'Run each task N times for variance measurement', '1')
   .option('--parallel <n>', 'Run up to N tasks concurrently', '1')
-  .action(async (options: { task?: string; iterations?: string; runs?: string; parallel?: string }) => {
+  .option('--max-mutations <n>', 'Max mutations per iteration', '3')
+  .option('--prune-threshold <n>', 'Skip tasks scoring above this on middle iterations', '95')
+  .option('--max-task-drop <n>', 'Roll back if any task drops more than N points', '20')
+  .action(async (options: { task?: string; iterations?: string; runs?: string; parallel?: string; maxMutations?: string; pruneThreshold?: string; maxTaskDrop?: string }) => {
     try {
       const projectRoot = process.cwd();
       const workspace = path.join(projectRoot, '.kairn-evolve');
@@ -298,6 +307,27 @@ evolveCommand
         }
         evolveConfig.parallelTasks = parallel;
 
+        const maxMutations = parseInt(options.maxMutations ?? '3', 10);
+        if (isNaN(maxMutations) || maxMutations < 1) {
+          console.log(ui.error('--max-mutations must be a positive integer'));
+          process.exit(1);
+        }
+        evolveConfig.maxMutationsPerIteration = maxMutations;
+
+        const pruneThreshold = parseInt(options.pruneThreshold ?? '95', 10);
+        if (isNaN(pruneThreshold) || pruneThreshold < 0 || pruneThreshold > 100) {
+          console.log(ui.error('--prune-threshold must be 0-100'));
+          process.exit(1);
+        }
+        evolveConfig.pruneThreshold = pruneThreshold;
+
+        const maxTaskDrop = parseInt(options.maxTaskDrop ?? '20', 10);
+        if (isNaN(maxTaskDrop) || maxTaskDrop < 1) {
+          console.log(ui.error('--max-task-drop must be a positive integer'));
+          process.exit(1);
+        }
+        evolveConfig.maxTaskDrop = maxTaskDrop;
+
         // Verify baseline exists
         try {
           await fs.access(path.join(workspace, 'iterations', '0', 'harness'));
@@ -342,7 +372,10 @@ evolveCommand
               console.log(chalk.dim(`      ${event.message ?? ''}`));
               break;
             case 'task-skipped':
-              console.log(chalk.dim(`    SKIP  ${event.taskId ?? 'unknown'} (100% last iteration)`));
+              console.log(chalk.dim(`    SKIP  ${event.taskId ?? 'unknown'} (above prune threshold last iteration)`));
+              break;
+            case 'task-regression':
+              console.log(chalk.yellow(`    DROP  ${event.taskId ?? 'unknown'} ${event.message ?? ''}`));
               break;
             case 'task-scored': {
               const taskScore = event.score ?? 0;

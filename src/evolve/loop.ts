@@ -72,22 +72,22 @@ export async function evolve(
     const isLastIter = iter === evolveConfig.maxIterations - 1;
     const prevLog = history.length > 0 ? history[history.length - 1] : null;
 
-    // On middle iterations, skip tasks that scored 100% on the previous iteration
     let tasksToRun = tasks;
     const carriedScores: Record<string, Score> = {};
+    const threshold = evolveConfig.pruneThreshold;
 
     if (!isFirstIter && !isLastIter && prevLog) {
       tasksToRun = [];
       for (const task of tasks) {
         const prevScore = prevLog.taskResults[task.id];
         const prevValue = prevScore ? (prevScore.score ?? (prevScore.pass ? 100 : 0)) : 0;
-        if (prevValue >= 100) {
-          carriedScores[task.id] = { pass: true, score: 100 };
+        if (prevValue >= threshold) {
+          carriedScores[task.id] = { pass: true, score: prevValue };
           onProgress?.({
             type: 'task-skipped',
             iteration: iter,
             taskId: task.id,
-            message: `Skipped ${task.id} (scored 100% last iteration)`,
+            message: `Skipped ${task.id} (scored ${prevValue.toFixed(0)}% >= ${threshold}% threshold)`,
           });
         } else {
           tasksToRun.push(task);
@@ -119,13 +119,41 @@ export async function evolve(
 
     if (iter === 0) baselineScore = aggregate;
 
-    // 2. ROLLBACK CHECK
-    if (iter > 0 && aggregate < bestScore) {
+    // 2. ROLLBACK CHECK (aggregate regression OR per-task drop exceeding maxTaskDrop)
+    let shouldRollback = iter > 0 && aggregate < bestScore;
+    let rollbackMessage = shouldRollback
+      ? `Regression: ${aggregate.toFixed(1)}% < ${bestScore.toFixed(1)}%. Rolling back.`
+      : '';
+
+    // Compare per-task scores against the best iteration (not previous — previous may be a rejected rollback)
+    const bestLog = history.find(h => h.iteration === bestIteration);
+    if (iter > 0 && !shouldRollback && bestLog) {
+      for (const [taskId, score] of Object.entries(results)) {
+        const currValue = score.score ?? (score.pass ? 100 : 0);
+        const bestTaskScore = bestLog.taskResults[taskId];
+        const bestValue = bestTaskScore ? (bestTaskScore.score ?? (bestTaskScore.pass ? 100 : 0)) : currValue;
+        const drop = bestValue - currValue;
+        if (drop > evolveConfig.maxTaskDrop) {
+          shouldRollback = true;
+          rollbackMessage = `Task ${taskId} dropped ${drop.toFixed(0)} points (${bestValue.toFixed(0)}% → ${currValue.toFixed(0)}%). Rolling back.`;
+          onProgress?.({
+            type: 'task-regression',
+            iteration: iter,
+            taskId,
+            score: currValue,
+            message: `dropped ${drop.toFixed(0)} points (limit: ${evolveConfig.maxTaskDrop})`,
+          });
+          break;
+        }
+      }
+    }
+
+    if (shouldRollback) {
       onProgress?.({
         type: 'rollback',
         iteration: iter,
         score: aggregate,
-        message: `Regression: ${aggregate.toFixed(1)}% < ${bestScore.toFixed(1)}%. Rolling back.`,
+        message: rollbackMessage,
       });
 
       // Log the regression
@@ -205,6 +233,13 @@ export async function evolve(
         kairnConfig,
         evolveConfig.proposerModel,
       );
+      // Enforce mutation cap
+      if (proposal.mutations.length > evolveConfig.maxMutationsPerIteration) {
+        proposal = {
+          ...proposal,
+          mutations: proposal.mutations.slice(0, evolveConfig.maxMutationsPerIteration),
+        };
+      }
     } catch (err) {
       // Proposer failed — log the error and copy current harness forward unchanged
       const errMsg = err instanceof Error ? err.message : String(err);

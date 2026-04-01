@@ -58,6 +58,9 @@ export interface EvolveConfig {
   maxIterations: number;
   parallelTasks: number;
   runsPerTask: number;
+  maxMutationsPerIteration: number;
+  pruneThreshold: number;
+  maxTaskDrop: number;
 }
 
 // Shape of parsed tasks.yaml
@@ -195,7 +198,7 @@ export interface EvolutionReport {
 
 // Progress events emitted during the evolution loop
 export interface LoopProgressEvent {
-  type: 'iteration-start' | 'iteration-scored' | 'rollback' | 'proposing' | 'proposer-error' | 'mutations-applied' | 'perfect-score' | 'task-start' | 'task-scored' | 'task-run' | 'task-skipped' | 'complete';
+  type: 'iteration-start' | 'iteration-scored' | 'rollback' | 'proposing' | 'proposer-error' | 'mutations-applied' | 'perfect-score' | 'task-start' | 'task-scored' | 'task-run' | 'task-skipped' | 'task-regression' | 'complete';
   iteration: number;
   score?: number;
   mutationCount?: number;

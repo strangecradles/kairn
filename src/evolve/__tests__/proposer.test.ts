@@ -156,7 +156,7 @@ describe('PROPOSER_SYSTEM_PROMPT', () => {
     expect(PROPOSER_SYSTEM_PROMPT).toContain('expert agent environment optimizer');
     expect(PROPOSER_SYSTEM_PROMPT).toContain('Diagnosis Process');
     expect(PROPOSER_SYSTEM_PROMPT).toContain('Output Format');
-    expect(PROPOSER_SYSTEM_PROMPT).toContain('MINIMAL changes only');
+    expect(PROPOSER_SYSTEM_PROMPT).toContain('AT MOST 3 mutations');
     expect(PROPOSER_SYSTEM_PROMPT).toContain('valid JSON');
   });
 

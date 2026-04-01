@@ -55,7 +55,7 @@ Treat .mcp.json like any other harness file — propose changes when traces show
 the agent lacks a tool it needs, or has tools that add noise without benefit.
 
 ## Rules
-- MINIMAL changes only. Don't rewrite the entire CLAUDE.md.
+- Propose AT MOST 3 mutations per iteration. Fewer, targeted mutations are more stable than many broad ones.
 - Each mutation must have a clear rationale tied to a specific trace observation.
 - Never remove something that's working for another task.
 - If a previous iteration's change caused a regression, REVERT it.
@@ -190,11 +190,18 @@ export function buildProposerUserMessage(
 function buildTraceSection(traces: Trace[], budget: number): string {
   if (traces.length === 0) return '## Execution Traces\n\n(No traces available)\n';
 
+  // Sort traces by score ascending (worst-first) so the proposer focuses on what's broken
+  const sortedTraces = [...traces].sort((a, b) => {
+    const scoreA = a.score.score ?? (a.score.pass ? 100 : 0);
+    const scoreB = b.score.score ?? (b.score.pass ? 100 : 0);
+    return scoreA - scoreB;
+  });
+
   // Try with default limit, halve stdout limit until it fits
   let stdoutLimit = STDOUT_TRUNCATION_LIMIT;
   for (let attempt = 0; attempt < 4; attempt++) {
-    const parts: string[] = ['## Execution Traces\n'];
-    for (const trace of traces) {
+    const parts: string[] = ['## Execution Traces (sorted worst-first)\n'];
+    for (const trace of sortedTraces) {
       const scoreNum = trace.score.score !== undefined ? trace.score.score : (trace.score.pass ? 100 : 0);
       const truncatedStdout = truncateStdout(trace.stdout, stdoutLimit);
       const filesChangedList = Object.entries(trace.filesChanged)
