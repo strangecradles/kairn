@@ -80,13 +80,9 @@ export async function callLLM(
   if (config.provider === "anthropic") {
     const client = new Anthropic({ apiKey: config.api_key });
 
-    // Build messages array; assistant prefill forces JSON start when jsonMode is on
     const messages: Array<{ role: "user" | "assistant"; content: string }> = [
       { role: "user", content: userMessage },
     ];
-    if (jsonMode) {
-      messages.push({ role: "assistant", content: "{" });
-    }
 
     try {
       const response = await client.messages.create({
@@ -99,7 +95,7 @@ export async function callLLM(
       if (!textBlock || textBlock.type !== "text") {
         throw new Error("No text response from compiler LLM");
       }
-      return jsonMode ? `{${textBlock.text}` : textBlock.text;
+      return textBlock.text;
     } catch (err) {
       throw new Error(classifyError(err, providerName));
     }

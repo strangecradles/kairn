@@ -277,9 +277,9 @@ describe("callLLM", () => {
     ).rejects.toThrow("No text response");
   });
 
-  it("uses assistant prefill for Anthropic when jsonMode is true", async () => {
+  it("does not use assistant prefill for Anthropic even when jsonMode is true", async () => {
     anthropicCreateMock.mockResolvedValueOnce({
-      content: [{ type: "text", text: '"reasoning": "analysis", "mutations": []}' }],
+      content: [{ type: "text", text: '{"reasoning": "analysis", "mutations": []}' }],
     });
 
     const config = makeConfig({ provider: "anthropic" });
@@ -291,10 +291,7 @@ describe("callLLM", () => {
     expect(result).toBe('{"reasoning": "analysis", "mutations": []}');
     expect(anthropicCreateMock).toHaveBeenCalledWith(
       expect.objectContaining({
-        messages: [
-          { role: "user", content: "test" },
-          { role: "assistant", content: "{" },
-        ],
+        messages: [{ role: "user", content: "test" }],
       })
     );
   });
