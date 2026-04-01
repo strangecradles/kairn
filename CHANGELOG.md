@@ -7,6 +7,23 @@ This project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [2.2.0] — 2026-03-31
+
+### Added
+- **Counterfactual diagnosis** — identifies which harness mutations helped or hurt specific tasks by comparing per-task scores across consecutive iterations
+- **Per-task trace diffing** — `diffTaskTraces()` compares two traces for the same task across iterations, showing score deltas, pass/fail changes, stdout differences, and file change diffs
+- **`kairn evolve report`** — human-readable Markdown summary of an evolution run including overview metrics, per-iteration table, evolution leaderboard (iterations × tasks × scores), and counterfactual diagnosis section
+- **`kairn evolve report --json`** — machine-readable JSON report with the same data for CI/pipeline integration
+- **`kairn evolve diff <iter1> <iter2>`** — colored unified diff of harness changes between two iterations with per-task score comparison table
+
+### Added (internal)
+- `src/evolve/diagnosis.ts` — `diffTaskTraces()` and `diagnoseCounterfactuals()` utilities
+- `src/evolve/report.ts` — `generateMarkdownReport()` and `generateJsonReport()` report generators
+- `TraceDiff`, `CounterfactualEntry`, `CounterfactualReport`, `EvolutionReport` types in `src/evolve/types.ts`
+- 24 new unit tests across `diagnosis.test.ts` and `report.test.ts`
+
+---
+
 ## [1.14.0] — 2026-03-31
 
 ### Added

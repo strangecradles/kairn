@@ -167,13 +167,13 @@ Full design doc: [`docs/design/v2.0-kairn-evolve.md`](docs/design/v2.0-kairn-evo
 - [x] Iteration log: `iterations/{N}/` with mutation_diff.patch, scores.json, proposer_reasoning.md
 - [x] Rollback on regression (score drops → revert to previous best)
 
-### v2.2.0 — Diagnosis & Reporting
-- [ ] Counterfactual diagnosis ("this CLAUDE.md change helped task A but hurt task B — why?")
-- [ ] Per-task trace diffing (what changed between iteration N and N+1 for the same task?)
-- [ ] `kairn evolve report` — human-readable Markdown summary of the evolution run
-- [ ] `kairn evolve report --json` — machine-readable for CI/pipelines
-- [ ] Evolution leaderboard (table of iterations × tasks × scores)
-- [ ] `kairn evolve diff <iter1> <iter2>` — show harness changes between iterations
+### v2.2.0 ✅ — Diagnosis & Reporting
+- [x] Counterfactual diagnosis ("this CLAUDE.md change helped task A but hurt task B — why?")
+- [x] Per-task trace diffing (what changed between iteration N and N+1 for the same task?)
+- [x] `kairn evolve report` — human-readable Markdown summary of the evolution run
+- [x] `kairn evolve report --json` — machine-readable for CI/pipelines
+- [x] Evolution leaderboard (table of iterations × tasks × scores)
+- [x] `kairn evolve diff <iter1> <iter2>` — show harness changes between iterations
 
 ### v2.3.0 — Advanced Scoring & Search
 - [ ] Custom scoring functions (user-defined Python/TS scoring scripts)

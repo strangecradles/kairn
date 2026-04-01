@@ -132,6 +132,60 @@ export interface EvolveResult {
   baselineScore: number;
 }
 
+// Diff between two traces for the same task across iterations
+export interface TraceDiff {
+  taskId: string;
+  iterA: number;
+  iterB: number;
+  scoreDelta: number;
+  passChanged: boolean;
+  stdoutDiff: string;
+  filesChangedDiff: {
+    added: string[];
+    removed: string[];
+    changed: string[];
+  };
+}
+
+// A single counterfactual entry linking a mutation to its impact
+export interface CounterfactualEntry {
+  iteration: number;
+  mutationSummary: string;
+  helpedTasks: Array<{ taskId: string; delta: number }>;
+  hurtTasks: Array<{ taskId: string; delta: number }>;
+  netScoreDelta: number;
+}
+
+// Full counterfactual report across an evolution run
+export interface CounterfactualReport {
+  entries: CounterfactualEntry[];
+}
+
+// Machine-readable evolution report
+export interface EvolutionReport {
+  overview: {
+    title: string;
+    totalIterations: number;
+    baselineScore: number;
+    bestScore: number;
+    bestIteration: number;
+    improvement: number;
+  };
+  iterations: Array<{
+    iteration: number;
+    score: number;
+    mutationCount: number;
+    status: string;
+  }>;
+  leaderboard: Array<{
+    taskId: string;
+    scores: Record<number, number>;
+    bestIteration: number;
+    bestScore: number;
+  }>;
+  counterfactuals: CounterfactualReport;
+}
+
 // Progress events emitted during the evolution loop
 export interface LoopProgressEvent {
   type: 'iteration-start' | 'iteration-scored' | 'rollback' | 'proposing' | 'mutations-applied' | 'perfect-score' | 'complete';
