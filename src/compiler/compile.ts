@@ -7,6 +7,10 @@ import { loadRegistry } from "../registry/loader.js";
 import { getCheapModel } from "../providers.js";
 import { callLLM } from "../llm.js";
 import type { EnvironmentSpec, RegistryTool, Clarification, SkeletonSpec, HarnessContent, CompileProgress } from "../types.js";
+import { generateIntentPatterns } from "../intent/patterns.js";
+import { compileIntentPrompt } from "../intent/prompt-template.js";
+import { renderIntentRouter } from "../intent/router-template.js";
+import { renderIntentLearner } from "../intent/learner-template.js";
 
 function buildUserMessage(intent: string, registry: RegistryTool[]): string {
   const registrySummary = registry
@@ -267,6 +271,29 @@ export async function compile(
   onProgress?.({ phase: 'pass3', status: 'running', message: 'Pass 3: Configuring MCP servers & settings...' });
   const settings = buildSettings(skeleton, registry);
   const mcpConfig = buildMcpConfig(skeleton, registry);
+
+  // Intent routing: generate patterns, prompt template, and hook scripts
+  const projectProfile = {
+    language: skeleton.outline.tech_stack[0] ?? 'unknown',
+    framework: skeleton.outline.tech_stack[1] ?? 'none',
+    scripts: {} as Record<string, string>, // scripts come from project scanning, not compilation
+  };
+  const intentPatterns = generateIntentPatterns(
+    harness.commands,
+    harness.agents ?? {},
+    projectProfile,
+  );
+  const intentPromptTemplate = compileIntentPrompt(
+    harness.commands,
+    harness.agents ?? {},
+  );
+  const generationTimestamp = new Date().toISOString();
+  const intentHooks: Record<string, string> = {};
+  if (intentPatterns.length > 0) {
+    intentHooks['intent-router'] = renderIntentRouter(intentPatterns, generationTimestamp);
+    intentHooks['intent-learner'] = renderIntentLearner();
+  }
+
   onProgress?.({ phase: 'pass3', status: 'success', message: 'Pass 3: Configured MCP servers & settings' });
 
   // Assemble final EnvironmentSpec
@@ -287,9 +314,9 @@ export async function compile(
       skills: harness.skills ?? {},
       agents: harness.agents ?? {},
       docs: harness.docs,
-      hooks: harness.hooks ?? {},
-      intent_patterns: [],
-      intent_prompt_template: '',
+      hooks: intentHooks,
+      intent_patterns: intentPatterns,
+      intent_prompt_template: intentPromptTemplate,
     },
   };
 

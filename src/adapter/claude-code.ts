@@ -44,6 +44,51 @@ function resolveSettings(
     base.hooks = hooks;
   }
 
+  // Add intent routing hooks if patterns exist
+  const hasIntentHooks = spec.harness.hooks &&
+    Object.keys(spec.harness.hooks).length > 0;
+
+  if (hasIntentHooks) {
+    const hooks = (base.hooks ?? {}) as Record<string, unknown[]>;
+
+    // Tier 1 (regex) + Tier 2 (prompt) on UserPromptSubmit
+    const userPromptSubmit = (hooks.UserPromptSubmit ?? []) as unknown[];
+    const intentHookEntry: Record<string, unknown> = {
+      matcher: '*',
+      hooks: [
+        {
+          type: 'command',
+          command: 'node "$CLAUDE_PROJECT_DIR/.claude/hooks/intent-router.mjs"',
+          timeout: 5,
+        },
+      ],
+    };
+    // Add Tier 2 prompt hook if template exists
+    if (spec.harness.intent_prompt_template) {
+      (intentHookEntry.hooks as unknown[]).push({
+        type: 'prompt',
+        prompt: spec.harness.intent_prompt_template,
+        timeout: 15,
+      });
+    }
+    userPromptSubmit.push(intentHookEntry);
+    hooks.UserPromptSubmit = userPromptSubmit;
+
+    // Intent learner on SessionStart
+    const sessionStart = (hooks.SessionStart ?? []) as unknown[];
+    sessionStart.push({
+      matcher: '*',
+      hooks: [{
+        type: 'command',
+        command: 'node "$CLAUDE_PROJECT_DIR/.claude/hooks/intent-learner.mjs"',
+        timeout: 10,
+      }],
+    });
+    hooks.SessionStart = sessionStart;
+
+    base.hooks = hooks;
+  }
+
   if (Object.keys(base).length === 0) return null;
   return base;
 }
@@ -101,6 +146,17 @@ export function buildFileMap(
   if (spec.harness.docs) {
     for (const [name, content] of Object.entries(spec.harness.docs)) {
       files.set(`.claude/docs/${name}.md`, content);
+    }
+  }
+
+  // Hooks (intent-router.mjs, intent-learner.mjs)
+  if (spec.harness.hooks) {
+    for (const [name, content] of Object.entries(spec.harness.hooks)) {
+      files.set(`.claude/hooks/${name}.mjs`, content);
+    }
+    // Create empty intent-log.jsonl for Tier 2 logging
+    if (Object.keys(spec.harness.hooks).length > 0) {
+      files.set('.claude/hooks/intent-log.jsonl', '');
     }
   }
 
@@ -186,6 +242,21 @@ export async function writeEnvironment(
       const p = path.join(claudeDir, "docs", `${name}.md`);
       await writeFile(p, content);
       written.push(`.claude/docs/${name}.md`);
+    }
+  }
+
+  // 9. Hooks (intent-router.mjs, intent-learner.mjs)
+  if (spec.harness.hooks) {
+    for (const [name, content] of Object.entries(spec.harness.hooks)) {
+      const p = path.join(claudeDir, "hooks", `${name}.mjs`);
+      await writeFile(p, content);
+      written.push(`.claude/hooks/${name}.mjs`);
+    }
+    // Create empty intent-log.jsonl for Tier 2 logging
+    if (Object.keys(spec.harness.hooks).length > 0) {
+      const logPath = path.join(claudeDir, "hooks", "intent-log.jsonl");
+      await writeFile(logPath, '');
+      written.push('.claude/hooks/intent-log.jsonl');
     }
   }
 
