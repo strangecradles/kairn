@@ -7,8 +7,10 @@ import {
   parseToolCalls,
   runTask,
   spawnClaude,
+  evaluateAll,
 } from '../runner.js';
-import type { Task, TaskResult } from '../types.js';
+import type { Task, TaskResult, Score } from '../types.js';
+import type { KairnConfig } from '../../types.js';
 
 // ─── snapshotFileList ────────────────────────────────────────────────────────
 
@@ -521,5 +523,230 @@ describe('runTask', () => {
       'utf-8',
     );
     expect(stdoutLog).toContain('SETUP_FOUND');
+  });
+});
+
+// ─── evaluateAll ────────────────────────────────────────────────────────────
+
+// Mock runTask and scoreTask for evaluateAll tests
+vi.mock('../runner.js', async (importOriginal) => {
+  const original = await importOriginal<typeof import('../runner.js')>();
+  return {
+    ...original,
+    evaluateAll: original.evaluateAll,
+  };
+});
+
+vi.mock('../scorers.js', () => ({
+  scoreTask: vi.fn(),
+}));
+
+vi.mock('../trace.js', async (importOriginal) => {
+  const original = await importOriginal<typeof import('../trace.js')>();
+  return {
+    ...original,
+    writeScore: vi.fn(),
+  };
+});
+
+// Import mocked modules
+import { scoreTask } from '../scorers.js';
+import { writeScore } from '../trace.js';
+
+const mockedScoreTask = vi.mocked(scoreTask);
+const mockedWriteScore = vi.mocked(writeScore);
+
+describe('evaluateAll', () => {
+  let tempDir: string;
+  let fakeBinDir: string;
+  let origPath: string | undefined;
+
+  function makeTask(overrides: Partial<Task> = {}): Task {
+    return {
+      id: 'task-1',
+      template: 'add-feature',
+      description: 'Add a hello world function',
+      setup: '',
+      expected_outcome: 'hello world function exists',
+      scoring: 'pass-fail',
+      timeout: 30,
+      ...overrides,
+    };
+  }
+
+  function makeConfig(): KairnConfig {
+    return {
+      provider: 'anthropic',
+      api_key: 'test-key',
+      model: 'claude-sonnet-4-6',
+      default_runtime: 'claude-code',
+      created_at: new Date().toISOString(),
+    };
+  }
+
+  beforeEach(async () => {
+    tempDir = path.join(
+      '/tmp',
+      `kairn-evalall-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+    );
+    fakeBinDir = path.join(tempDir, 'bin');
+    await fs.mkdir(fakeBinDir, { recursive: true });
+
+    // Create fake claude binary
+    const fakeScript = path.join(fakeBinDir, 'claude');
+    await fs.writeFile(
+      fakeScript,
+      '#!/bin/bash\ncat\necho "done"',
+    );
+    await fs.chmod(fakeScript, 0o755);
+
+    origPath = process.env['PATH'];
+    process.env['PATH'] = `${fakeBinDir}:${origPath}`;
+
+    // Create harness directory
+    await fs.mkdir(path.join(tempDir, 'harness'), { recursive: true });
+    await fs.writeFile(path.join(tempDir, 'harness', 'CLAUDE.md'), '# Test');
+
+    // Create workspace directory for traces
+    await fs.mkdir(path.join(tempDir, 'workspace', 'traces', '0'), { recursive: true });
+
+    vi.clearAllMocks();
+  });
+
+  afterEach(async () => {
+    process.env['PATH'] = origPath;
+    await fs.rm(tempDir, { recursive: true, force: true });
+  });
+
+  it('returns results keyed by task id', async () => {
+    const tasks = [makeTask({ id: 'task-a' }), makeTask({ id: 'task-b' })];
+    const harnessPath = path.join(tempDir, 'harness');
+    const workspacePath = path.join(tempDir, 'workspace');
+
+    // Without config, no scoreTask is called — uses runTask default score
+    const { results } = await evaluateAll(tasks, harnessPath, workspacePath, 0, null);
+
+    expect(results).toHaveProperty('task-a');
+    expect(results).toHaveProperty('task-b');
+    expect(Object.keys(results)).toHaveLength(2);
+  });
+
+  it('returns aggregate of 0 when all tasks fail', async () => {
+    const tasks = [makeTask({ id: 'fail-1' }), makeTask({ id: 'fail-2' })];
+    const harnessPath = path.join(tempDir, 'harness');
+    const workspacePath = path.join(tempDir, 'workspace');
+
+    // runTask returns pass=false by default (Pending scoring)
+    const { aggregate } = await evaluateAll(tasks, harnessPath, workspacePath, 0, null);
+
+    // Both tasks have pass=false, no score field, so score is 0 each
+    expect(aggregate).toBe(0);
+  });
+
+  it('uses scoreTask when config is provided', async () => {
+    const tasks = [makeTask({ id: 'scored-1' })];
+    const harnessPath = path.join(tempDir, 'harness');
+    const workspacePath = path.join(tempDir, 'workspace');
+    const config = makeConfig();
+
+    const scoredResult: Score = { pass: true, score: 85, details: 'Good work' };
+    mockedScoreTask.mockResolvedValue(scoredResult);
+    mockedWriteScore.mockResolvedValue(undefined);
+
+    const { results, aggregate } = await evaluateAll(
+      tasks, harnessPath, workspacePath, 0, config,
+    );
+
+    expect(mockedScoreTask).toHaveBeenCalledTimes(1);
+    expect(mockedWriteScore).toHaveBeenCalledTimes(1);
+    expect(results['scored-1']).toEqual(scoredResult);
+    expect(aggregate).toBe(85);
+  });
+
+  it('computes correct aggregate for mixed scores', async () => {
+    const tasks = [
+      makeTask({ id: 'mix-1' }),
+      makeTask({ id: 'mix-2' }),
+      makeTask({ id: 'mix-3' }),
+    ];
+    const harnessPath = path.join(tempDir, 'harness');
+    const workspacePath = path.join(tempDir, 'workspace');
+    const config = makeConfig();
+
+    mockedScoreTask
+      .mockResolvedValueOnce({ pass: true, score: 100, details: 'Perfect' })
+      .mockResolvedValueOnce({ pass: false, score: 50, details: 'Partial' })
+      .mockResolvedValueOnce({ pass: true, score: 80, details: 'Good' });
+    mockedWriteScore.mockResolvedValue(undefined);
+
+    const { aggregate } = await evaluateAll(
+      tasks, harnessPath, workspacePath, 0, config,
+    );
+
+    // (100 + 50 + 80) / 3 ≈ 76.67
+    expect(aggregate).toBeCloseTo(76.67, 1);
+  });
+
+  it('returns aggregate 0 for empty tasks array', async () => {
+    const harnessPath = path.join(tempDir, 'harness');
+    const workspacePath = path.join(tempDir, 'workspace');
+
+    const { results, aggregate } = await evaluateAll(
+      [], harnessPath, workspacePath, 0, null,
+    );
+
+    expect(results).toEqual({});
+    expect(aggregate).toBe(0);
+  });
+
+  it('writes score to trace dir when config is provided', async () => {
+    const tasks = [makeTask({ id: 'write-score-1' })];
+    const harnessPath = path.join(tempDir, 'harness');
+    const workspacePath = path.join(tempDir, 'workspace');
+    const config = makeConfig();
+
+    const score: Score = { pass: true, score: 90, details: 'Great' };
+    mockedScoreTask.mockResolvedValue(score);
+    mockedWriteScore.mockResolvedValue(undefined);
+
+    await evaluateAll(tasks, harnessPath, workspacePath, 0, config);
+
+    expect(mockedWriteScore).toHaveBeenCalledWith(
+      expect.stringContaining('write-score-1'),
+      score,
+    );
+  });
+
+  it('uses pass boolean for aggregate when score field is undefined', async () => {
+    const tasks = [makeTask({ id: 'bool-1' }), makeTask({ id: 'bool-2' })];
+    const harnessPath = path.join(tempDir, 'harness');
+    const workspacePath = path.join(tempDir, 'workspace');
+    const config = makeConfig();
+
+    // Return scores without numeric score field -- use pass boolean
+    mockedScoreTask
+      .mockResolvedValueOnce({ pass: true, details: 'Passed' })
+      .mockResolvedValueOnce({ pass: false, details: 'Failed' });
+    mockedWriteScore.mockResolvedValue(undefined);
+
+    const { aggregate } = await evaluateAll(
+      tasks, harnessPath, workspacePath, 0, config,
+    );
+
+    // pass=true → 100, pass=false → 0 → average = 50
+    expect(aggregate).toBe(50);
+  });
+
+  it('creates trace directories for each task at given iteration', async () => {
+    const tasks = [makeTask({ id: 'dir-task-1' })];
+    const harnessPath = path.join(tempDir, 'harness');
+    const workspacePath = path.join(tempDir, 'workspace');
+
+    await evaluateAll(tasks, harnessPath, workspacePath, 3, null);
+
+    // runTask creates the trace dir — check it was created
+    const traceDir = path.join(workspacePath, 'traces', '3', 'dir-task-1');
+    const exists = await fs.stat(traceDir).then(() => true).catch(() => false);
+    expect(exists).toBe(true);
   });
 });

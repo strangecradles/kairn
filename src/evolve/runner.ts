@@ -4,8 +4,10 @@ import fs from 'fs/promises';
 import os from 'os';
 import path from 'path';
 import { copyDir } from './baseline.js';
-import { writeTrace } from './trace.js';
-import type { Task, TaskResult, Trace } from './types.js';
+import { writeTrace, writeScore } from './trace.js';
+import { scoreTask } from './scorers.js';
+import type { KairnConfig } from '../types.js';
+import type { Task, TaskResult, Trace, Score } from './types.js';
 
 const execAsync = promisify(exec);
 
@@ -240,4 +242,60 @@ export function parseToolCalls(stdout: string): unknown[] {
   } catch {
     return [];
   }
+}
+
+/**
+ * Run all tasks against a harness and return aggregated results.
+ *
+ * Each task is run sequentially via `runTask`, scored (optionally via
+ * `scoreTask` when a `KairnConfig` is provided), and its score written
+ * to the trace directory.
+ *
+ * The aggregate score is the arithmetic mean of all task scores.
+ * For scores that have a numeric `score` field, that value is used directly.
+ * For pass/fail scores without a numeric value, `pass=true` counts as 100
+ * and `pass=false` counts as 0.
+ */
+export async function evaluateAll(
+  tasks: Task[],
+  harnessPath: string,
+  workspacePath: string,
+  iteration: number,
+  config: KairnConfig | null,
+): Promise<{ results: Record<string, Score>; aggregate: number }> {
+  const results: Record<string, Score> = {};
+
+  for (const task of tasks) {
+    const traceDir = path.join(
+      workspacePath,
+      'traces',
+      iteration.toString(),
+      task.id,
+    );
+    const taskResult = await runTask(task, harnessPath, traceDir, iteration);
+
+    let score = taskResult.score;
+    if (config) {
+      const stdout = await fs
+        .readFile(path.join(traceDir, 'stdout.log'), 'utf-8')
+        .catch(() => '');
+      const stderr = await fs
+        .readFile(path.join(traceDir, 'stderr.log'), 'utf-8')
+        .catch(() => '');
+      score = await scoreTask(task, traceDir, stdout, stderr, config);
+      await writeScore(traceDir, score);
+    }
+
+    results[task.id] = score;
+  }
+
+  // Aggregate: average of all scores (pass-fail counted as 0 or 100)
+  const scores = Object.values(results);
+  const total = scores.reduce(
+    (sum, s) => sum + (s.score ?? (s.pass ? 100 : 0)),
+    0,
+  );
+  const aggregate = scores.length > 0 ? total / scores.length : 0;
+
+  return { results, aggregate };
 }
