@@ -7,6 +7,9 @@ import type { Task, Score } from './types.js';
 const COMMAND_PATTERN =
   /^(npm |npx |node |python |make |cargo |go |git |test |ls |cat |grep |curl )/;
 
+/** Shell metacharacters that could enable command injection. */
+const SHELL_METACHAR_PATTERN = /[;|&`$()<>]/;
+
 /** System prompt for LLM-as-judge scoring. */
 export const JUDGE_SYSTEM_PROMPT = `You are an eval judge for Claude Code agent tasks. Given a task description, expected outcome, and actual execution results, determine if the task was completed successfully.
 
@@ -46,9 +49,14 @@ export async function passFailScorer(
     .filter((line) => COMMAND_PATTERN.test(line));
 
   if (commands.length > 0) {
-    // Execute verification commands
+    // Execute verification commands — reject commands with shell metacharacters
+    // to prevent injection from LLM-generated expected_outcome strings
     const failures: string[] = [];
     for (const cmd of commands) {
+      if (SHELL_METACHAR_PATTERN.test(cmd)) {
+        failures.push(`Rejected unsafe command (shell metacharacters): ${cmd}`);
+        continue;
+      }
       try {
         await execCommand(cmd, workspacePath);
       } catch (err) {
@@ -221,7 +229,8 @@ export async function rubricScorer(
     }
   }
 
-  const totalScore = Math.round(weightedSum * 100);
+  const totalWeight = task.rubric.reduce((sum, c) => sum + c.weight, 0);
+  const totalScore = totalWeight > 0 ? Math.round((weightedSum / totalWeight) * 100) : 0;
   return {
     pass: totalScore >= 60,
     score: totalScore,

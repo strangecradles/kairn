@@ -88,7 +88,7 @@ Return a JSON object with a "tasks" array. Each task has:
 - description: concrete task description the agent will receive
 - setup: shell commands to prepare the workspace (e.g., "npm install")
 - expected_outcome: multi-line string describing what success looks like
-- scoring: "pass-fail" or "rubric"
+- scoring: "pass-fail", "llm-judge", or "rubric"
 - timeout: seconds (300 for features/bugs, 600 for refactors, 180 for config/docs/tests)
 
 Return ONLY valid JSON, no markdown fences.`;

@@ -192,7 +192,7 @@ evolveCommand
         process.exit(1);
       }
 
-      const parsed = yamlParse(tasksContent!) as TasksFile;
+      const parsed = yamlParse(tasksContent) as TasksFile;
       if (!parsed?.tasks || parsed.tasks.length === 0) {
         console.log(ui.error('No tasks found in tasks.yaml'));
         process.exit(1);

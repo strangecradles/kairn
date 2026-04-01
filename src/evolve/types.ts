@@ -48,7 +48,7 @@ export interface Trace {
 export interface EvolveConfig {
   model: string;
   proposerModel: string;
-  scorer: 'pass-fail' | 'llm-judge';
+  scorer: 'pass-fail' | 'llm-judge' | 'rubric';
   maxIterations: number;
   parallelTasks: number;
 }

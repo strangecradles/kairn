@@ -38,6 +38,8 @@ export async function runTask(
     await copyDir(harnessPath, path.join(tmpDir, '.claude'));
 
     // 3. Run setup commands if any
+    // Trust boundary: setup commands come from tasks.yaml which is user-reviewed
+    // before execution. The user is the trust anchor for these commands.
     let setupStderr = '';
     if (task.setup.trim()) {
       try {
