@@ -356,6 +356,7 @@ export async function runWithConcurrency<T>(
   const results: T[] = new Array(tasks.length);
   const executing = new Set<Promise<void>>();
   const errors: unknown[] = [];
+  const effectiveLimit = Math.max(1, limit);
 
   for (let i = 0; i < tasks.length; i++) {
     const p = tasks[i]().then(
@@ -364,7 +365,7 @@ export async function runWithConcurrency<T>(
     );
     const tracked = p.then(() => { executing.delete(tracked); });
     executing.add(tracked);
-    if (executing.size >= limit) {
+    if (executing.size >= effectiveLimit) {
       await Promise.race(executing);
     }
   }
