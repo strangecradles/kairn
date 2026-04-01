@@ -15,6 +15,20 @@ import type {
 } from './types.js';
 
 /**
+ * Compute dynamic mutation cap based on iteration progress.
+ * First 40% of iterations: full cap (exploration).
+ * Last 60%: linearly decays to 1 (exploitation).
+ */
+export function computeMutationCap(iter: number, maxIterations: number, maxMutations: number): number {
+  if (maxIterations <= 1) return maxMutations;
+  const progress = iter / (maxIterations - 1); // 0.0 to 1.0
+  if (progress <= 0.4) return maxMutations;
+  // Linear decay from maxMutations at 40% to 1 at 100%
+  const decayProgress = (progress - 0.4) / 0.6; // 0.0 to 1.0 within decay phase
+  return Math.max(1, Math.round(maxMutations * (1 - decayProgress * (1 - 1 / maxMutations))));
+}
+
+/**
  * Run the evolution loop: evaluate -> diagnose -> mutate -> re-evaluate.
  *
  * Each iteration follows these steps:
@@ -189,10 +203,11 @@ export async function evolve(
             kairnConfig,
             evolveConfig.proposerModel,
           );
-          if (rollbackProposal.mutations.length > evolveConfig.maxMutationsPerIteration) {
+          const rollbackCap = computeMutationCap(iter, evolveConfig.maxIterations, evolveConfig.maxMutationsPerIteration);
+          if (rollbackProposal.mutations.length > rollbackCap) {
             rollbackProposal = {
               ...rollbackProposal,
-              mutations: rollbackProposal.mutations.slice(0, evolveConfig.maxMutationsPerIteration),
+              mutations: rollbackProposal.mutations.slice(0, rollbackCap),
             };
           }
           const nextIterDir = path.join(workspacePath, 'iterations', (iter + 1).toString());
@@ -259,10 +274,11 @@ export async function evolve(
         evolveConfig.proposerModel,
       );
       // Enforce mutation cap
-      if (proposal.mutations.length > evolveConfig.maxMutationsPerIteration) {
+      const iterCap = computeMutationCap(iter, evolveConfig.maxIterations, evolveConfig.maxMutationsPerIteration);
+      if (proposal.mutations.length > iterCap) {
         proposal = {
           ...proposal,
-          mutations: proposal.mutations.slice(0, evolveConfig.maxMutationsPerIteration),
+          mutations: proposal.mutations.slice(0, iterCap),
         };
       }
     } catch (err) {
