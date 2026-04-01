@@ -1,6 +1,10 @@
 import { Command } from "commander";
 import chalk from "chalk";
+import { createRequire } from "module";
 import { initCommand } from "./commands/init.js";
+
+const require = createRequire(import.meta.url);
+const pkg = require("../package.json") as { version: string };
 import { describeCommand } from "./commands/describe.js";
 import { listCommand } from "./commands/list.js";
 import { activateCommand } from "./commands/activate.js";
@@ -19,7 +23,7 @@ program
   .description(
     "Compile natural language intent into optimized Claude Code environments"
   )
-  .version("1.9.0")
+  .version(pkg.version)
   .option("--no-color", "Disable colored output");
 
 program.addCommand(initCommand);
