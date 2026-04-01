@@ -107,6 +107,34 @@ export async function evolve(
           tasksToRun.push(task);
         }
       }
+
+      // Mini-batch sampling: if evalSampleSize is set, sample from remaining tasks
+      const sampleSize = evolveConfig.evalSampleSize;
+      if (sampleSize > 0 && sampleSize < tasksToRun.length) {
+        // Seeded shuffle based on iteration number for reproducibility
+        const shuffled = [...tasksToRun].sort((a, b) => {
+          const hashA = (iter * 31 + a.id.charCodeAt(0)) % 1000;
+          const hashB = (iter * 31 + b.id.charCodeAt(0)) % 1000;
+          return hashA - hashB;
+        });
+        const sampled = new Set(shuffled.slice(0, sampleSize).map(t => t.id));
+
+        // Carry forward unsampled tasks
+        for (const task of tasksToRun) {
+          if (!sampled.has(task.id)) {
+            const prev = prevLog.taskResults[task.id];
+            const prevVal = prev ? (prev.score ?? (prev.pass ? 100 : 0)) : 0;
+            carriedScores[task.id] = { pass: prevVal >= 50, score: prevVal };
+            onProgress?.({
+              type: 'task-skipped',
+              iteration: iter,
+              taskId: task.id,
+              message: `Sampled out ${task.id} (mini-batch ${sampleSize}/${tasksToRun.length})`,
+            });
+          }
+        }
+        tasksToRun = tasksToRun.filter(t => sampled.has(t.id));
+      }
     }
 
     const { results: evalResults, aggregate: evalAggregate } = await evaluateAll(
