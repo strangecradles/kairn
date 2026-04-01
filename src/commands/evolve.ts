@@ -11,8 +11,10 @@ import { generateTasksFromTemplates, EVAL_TEMPLATES, selectTemplatesForWorkflow 
 import { snapshotBaseline } from '../evolve/baseline.js';
 import { runTask } from '../evolve/runner.js';
 import { scoreTask } from '../evolve/scorers.js';
-import { writeScore } from '../evolve/trace.js';
+import { writeScore, loadIterationLog } from '../evolve/trace.js';
 import { evolve } from '../evolve/loop.js';
+import { generateMarkdownReport, generateJsonReport } from '../evolve/report.js';
+import { generateDiff } from '../evolve/mutator.js';
 import { loadConfig } from '../config.js';
 import type { EvolveConfig, Task, TasksFile, TaskResult, LoopProgressEvent } from '../evolve/types.js';
 
@@ -346,6 +348,132 @@ evolveCommand
           else if (iter.score >= 100) status = 'perfect';
           else if (iter.iteration === result.bestIteration) status = 'best';
           console.log(`  ${iter.iteration.toString().padStart(4)}  ${scoreStr}  ${mutStr.padStart(9)}  ${status}`);
+        }
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.log(ui.error(msg));
+      process.exit(1);
+    }
+  });
+
+// --- kairn evolve report ---
+evolveCommand
+  .command('report')
+  .description('Generate a summary report of the evolution run')
+  .option('--json', 'Output machine-readable JSON instead of Markdown')
+  .action(async (options: { json?: boolean }) => {
+    try {
+      const projectRoot = process.cwd();
+      const workspace = path.join(projectRoot, '.kairn-evolve');
+
+      // Verify workspace exists
+      try {
+        await fs.access(workspace);
+      } catch {
+        console.log(ui.error('No .kairn-evolve/ directory found. Run kairn evolve init first.'));
+        process.exit(1);
+      }
+
+      if (options.json) {
+        const report = await generateJsonReport(workspace);
+        console.log(JSON.stringify(report, null, 2));
+      } else {
+        const markdown = await generateMarkdownReport(workspace);
+        console.log(markdown);
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.log(ui.error(msg));
+      process.exit(1);
+    }
+  });
+
+// --- kairn evolve diff ---
+evolveCommand
+  .command('diff <iter1> <iter2>')
+  .description('Show harness changes between two iterations')
+  .action(async (iter1Str: string, iter2Str: string) => {
+    try {
+      const projectRoot = process.cwd();
+      const workspace = path.join(projectRoot, '.kairn-evolve');
+
+      const iter1 = parseInt(iter1Str, 10);
+      const iter2 = parseInt(iter2Str, 10);
+
+      if (isNaN(iter1) || isNaN(iter2)) {
+        console.log(ui.error('Both arguments must be integers (iteration numbers)'));
+        process.exit(1);
+      }
+
+      // Verify both iteration harness directories exist
+      const harness1 = path.join(workspace, 'iterations', iter1.toString(), 'harness');
+      const harness2 = path.join(workspace, 'iterations', iter2.toString(), 'harness');
+
+      try {
+        await fs.access(harness1);
+      } catch {
+        console.log(ui.error(`Iteration ${iter1} harness not found at ${harness1}`));
+        process.exit(1);
+      }
+      try {
+        await fs.access(harness2);
+      } catch {
+        console.log(ui.error(`Iteration ${iter2} harness not found at ${harness2}`));
+        process.exit(1);
+      }
+
+      console.log(ui.section(`Diff: Iteration ${iter1} → ${iter2}`));
+
+      // Generate and display colored diff
+      const diffPatch = await generateDiff(harness1, harness2);
+
+      if (!diffPatch) {
+        console.log(chalk.dim('  No harness changes between these iterations.'));
+      } else {
+        for (const line of diffPatch.split('\n')) {
+          if (line.startsWith('---') || line.startsWith('+++')) {
+            console.log(chalk.bold(line));
+          } else if (line.startsWith('+')) {
+            console.log(chalk.green(line));
+          } else if (line.startsWith('-')) {
+            console.log(chalk.red(line));
+          } else {
+            console.log(line);
+          }
+        }
+      }
+
+      // Per-task score comparison
+      const [log1, log2] = await Promise.all([
+        loadIterationLog(workspace, iter1),
+        loadIterationLog(workspace, iter2),
+      ]);
+
+      if (log1 && log2) {
+        console.log('');
+        console.log(ui.section('Score Comparison'));
+        console.log('');
+        console.log('  Task                          Iter ' + iter1 + '    Iter ' + iter2 + '    Delta');
+
+        const allTaskIds = new Set([
+          ...Object.keys(log1.taskResults),
+          ...Object.keys(log2.taskResults),
+        ]);
+
+        for (const taskId of [...allTaskIds].sort()) {
+          const s1 = log1.taskResults[taskId];
+          const s2 = log2.taskResults[taskId];
+          const score1 = s1 ? (s1.score ?? (s1.pass ? 100 : 0)) : 0;
+          const score2 = s2 ? (s2.score ?? (s2.pass ? 100 : 0)) : 0;
+          const delta = score2 - score1;
+          const deltaStr = delta > 0
+            ? chalk.green(`+${delta.toFixed(0)}`)
+            : delta < 0
+              ? chalk.red(delta.toFixed(0).toString())
+              : chalk.dim('0');
+          const name = taskId.padEnd(30);
+          console.log(`  ${name}  ${score1.toFixed(0).padStart(5)}%    ${score2.toFixed(0).padStart(5)}%    ${deltaStr}`);
         }
       }
     } catch (err) {
