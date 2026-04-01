@@ -357,6 +357,15 @@ export function parseToolCalls(stdout: string): unknown[] {
  * For pass/fail scores without a numeric value, `pass=true` counts as 100
  * and `pass=false` counts as 0.
  */
+/**
+ * Compute population standard deviation for a list of numbers.
+ */
+function computeStddev(values: number[], mean: number): number {
+  if (values.length <= 1) return 0;
+  const sumSqDiffs = values.reduce((sum, v) => sum + (v - mean) ** 2, 0);
+  return Math.sqrt(sumSqDiffs / values.length);
+}
+
 export async function evaluateAll(
   tasks: Task[],
   harnessPath: string,
@@ -364,41 +373,95 @@ export async function evaluateAll(
   iteration: number,
   config: KairnConfig | null,
   onProgress?: (event: LoopProgressEvent) => void,
+  runsPerTask: number = 1,
 ): Promise<{ results: Record<string, Score>; aggregate: number }> {
   const results: Record<string, Score> = {};
   const projectRoot = path.resolve(workspacePath, '..');
+  const effectiveRuns = Math.max(1, runsPerTask);
 
   for (const task of tasks) {
-    const traceDir = path.join(
-      workspacePath,
-      'traces',
-      iteration.toString(),
-      task.id,
-    );
-
     onProgress?.({ type: 'task-start', iteration, taskId: task.id });
 
-    const taskResult = await runTask(task, harnessPath, traceDir, iteration, projectRoot);
+    if (effectiveRuns > 1 && config) {
+      // Multi-run mode: run the task N times and compute variance
+      const runScores: number[] = [];
 
-    let score = taskResult.score;
-    if (config) {
-      const stdout = await fs
-        .readFile(path.join(traceDir, 'stdout.log'), 'utf-8')
-        .catch(() => '');
-      const stderr = await fs
-        .readFile(path.join(traceDir, 'stderr.log'), 'utf-8')
-        .catch(() => '');
-      score = await scoreTask(task, traceDir, stdout, stderr, config);
-      await writeScore(traceDir, score);
+      for (let run = 0; run < effectiveRuns; run++) {
+        const traceDir = path.join(
+          workspacePath,
+          'traces',
+          iteration.toString(),
+          `${task.id}_run${run}`,
+        );
+
+        onProgress?.({
+          type: 'task-run',
+          iteration,
+          taskId: task.id,
+          message: `Run ${run + 1}/${effectiveRuns} of ${task.id}`,
+        });
+
+        const taskResult = await runTask(task, harnessPath, traceDir, iteration, projectRoot);
+
+        const stdout = await fs
+          .readFile(path.join(traceDir, 'stdout.log'), 'utf-8')
+          .catch(() => '');
+        const stderr = await fs
+          .readFile(path.join(traceDir, 'stderr.log'), 'utf-8')
+          .catch(() => '');
+        const score = await scoreTask(task, traceDir, stdout, stderr, config);
+        await writeScore(traceDir, score);
+
+        runScores.push(score.score ?? (score.pass ? 100 : 0));
+      }
+
+      // Compute mean and stddev
+      const mean = runScores.reduce((a, b) => a + b, 0) / runScores.length;
+      const stddev = computeStddev(runScores, mean);
+
+      results[task.id] = {
+        pass: mean >= 50,
+        score: mean,
+        details: `Mean of ${effectiveRuns} runs`,
+        variance: {
+          runs: effectiveRuns,
+          scores: runScores,
+          mean,
+          stddev,
+        },
+      };
+    } else {
+      // Single-run mode (original behavior)
+      const traceDir = path.join(
+        workspacePath,
+        'traces',
+        iteration.toString(),
+        task.id,
+      );
+
+      const taskResult = await runTask(task, harnessPath, traceDir, iteration, projectRoot);
+
+      let score = taskResult.score;
+      if (config) {
+        const stdout = await fs
+          .readFile(path.join(traceDir, 'stdout.log'), 'utf-8')
+          .catch(() => '');
+        const stderr = await fs
+          .readFile(path.join(traceDir, 'stderr.log'), 'utf-8')
+          .catch(() => '');
+        score = await scoreTask(task, traceDir, stdout, stderr, config);
+        await writeScore(traceDir, score);
+      }
+
+      results[task.id] = score;
     }
 
-    results[task.id] = score;
-
+    const finalScore = results[task.id];
     onProgress?.({
       type: 'task-scored',
       iteration,
       taskId: task.id,
-      score: score.score ?? (score.pass ? 100 : 0),
+      score: finalScore.score ?? (finalScore.pass ? 100 : 0),
     });
   }
 

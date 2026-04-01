@@ -25,6 +25,7 @@ const DEFAULT_CONFIG: EvolveConfig = {
   scorer: 'pass-fail',
   maxIterations: 5,
   parallelTasks: 1,
+  runsPerTask: 1,
 };
 
 /**
@@ -41,6 +42,7 @@ export async function loadEvolveConfigFromWorkspace(workspacePath: string): Prom
       scorer: (parsed.scorer as EvolveConfig['scorer']) ?? DEFAULT_CONFIG.scorer,
       maxIterations: (parsed.max_iterations as number) ?? DEFAULT_CONFIG.maxIterations,
       parallelTasks: (parsed.parallel_tasks as number) ?? DEFAULT_CONFIG.parallelTasks,
+      runsPerTask: (parsed.runs_per_task as number) ?? DEFAULT_CONFIG.runsPerTask,
     };
   } catch {
     return { ...DEFAULT_CONFIG };
@@ -192,7 +194,8 @@ evolveCommand
   .description('Run tasks against the current harness')
   .option('--task <id>', 'Run a specific task by ID')
   .option('--iterations <n>', 'Number of evolution iterations', '5')
-  .action(async (options: { task?: string; iterations?: string }) => {
+  .option('--runs <n>', 'Run each task N times for variance measurement', '1')
+  .action(async (options: { task?: string; iterations?: string; runs?: string }) => {
     try {
       const projectRoot = process.cwd();
       const workspace = path.join(projectRoot, '.kairn-evolve');
@@ -284,6 +287,13 @@ evolveCommand
         }
         evolveConfig.maxIterations = iterations;
 
+        const runs = parseInt(options.runs ?? '1', 10);
+        if (isNaN(runs) || runs < 1) {
+          console.log(ui.error('--runs must be a positive integer'));
+          process.exit(1);
+        }
+        evolveConfig.runsPerTask = runs;
+
         // Verify baseline exists
         try {
           await fs.access(path.join(workspace, 'iterations', '0', 'harness'));
@@ -325,6 +335,9 @@ evolveCommand
             case 'task-start':
               console.log(chalk.dim(`    Running: ${event.taskId ?? 'unknown'}...`));
               break;
+            case 'task-run':
+              console.log(chalk.dim(`      ${event.message ?? ''}`));
+              break;
             case 'task-scored': {
               const taskScore = event.score ?? 0;
               const taskStatus = taskScore >= 100 ? chalk.green('PASS') : taskScore >= 60 ? chalk.yellow('PARTIAL') : chalk.red('FAIL');
@@ -350,9 +363,25 @@ evolveCommand
         console.log('');
 
         // Iteration table
-        console.log('  Iter  Score     Mutations  Status');
+        const showVariance = runs > 1;
+        console.log(showVariance
+          ? '  Iter  Score        Mutations  Status'
+          : '  Iter  Score     Mutations  Status');
         for (const iter of result.iterations) {
-          const scoreStr = iter.score.toFixed(1).padStart(6) + '%';
+          // Compute average stddev across tasks for this iteration
+          let scoreDisplay: string;
+          if (showVariance) {
+            const taskScores = Object.values(iter.taskResults);
+            const stddevs = taskScores
+              .map(s => s.variance?.stddev)
+              .filter((v): v is number => v !== undefined);
+            const avgStddev = stddevs.length > 0
+              ? stddevs.reduce((a, b) => a + b, 0) / stddevs.length
+              : 0;
+            scoreDisplay = `${iter.score.toFixed(1).padStart(6)}% ±${avgStddev.toFixed(1)}`;
+          } else {
+            scoreDisplay = iter.score.toFixed(1).padStart(6) + '%';
+          }
           const mutations = iter.proposal?.mutations.length ?? 0;
           const mutStr = mutations > 0 ? mutations.toString() : '-';
           let status = 'evaluated';
@@ -360,7 +389,7 @@ evolveCommand
           else if (!iter.proposal && !iter.diffPatch) status = 'rollback';
           else if (iter.score >= 100) status = 'perfect';
           else if (iter.iteration === result.bestIteration) status = 'best';
-          console.log(`  ${iter.iteration.toString().padStart(4)}  ${scoreStr}  ${mutStr.padStart(9)}  ${status}`);
+          console.log(`  ${iter.iteration.toString().padStart(4)}  ${scoreDisplay}  ${mutStr.padStart(9)}  ${status}`);
         }
       }
     } catch (err) {

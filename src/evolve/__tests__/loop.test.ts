@@ -58,6 +58,7 @@ function makeEvolveConfig(overrides: Partial<EvolveConfig> = {}): EvolveConfig {
     scorer: 'pass-fail',
     maxIterations: 3,
     parallelTasks: 1,
+    runsPerTask: 1,
     ...overrides,
   };
 }
@@ -203,6 +204,7 @@ describe('evolve', () => {
       0,
       kairnConfig,
       undefined,
+      1,
     );
   });
 
