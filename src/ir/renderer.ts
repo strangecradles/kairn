@@ -216,8 +216,11 @@ export function renderAgentWithFrontmatter(agent: AgentNode): string {
   const hasModel = agent.model !== undefined;
   const hasDisallowed =
     agent.disallowedTools !== undefined && agent.disallowedTools.length > 0;
+  const hasExtra =
+    agent.extraFrontmatter !== undefined &&
+    Object.keys(agent.extraFrontmatter).length > 0;
 
-  if (!hasModel && !hasDisallowed) {
+  if (!hasModel && !hasDisallowed && !hasExtra) {
     return agent.content;
   }
 
@@ -231,6 +234,26 @@ export function renderAgentWithFrontmatter(agent: AgentNode): string {
     yamlLines.push("disallowedTools:");
     for (const tool of agent.disallowedTools!) {
       yamlLines.push(`  - ${tool}`);
+    }
+  }
+
+  // Re-emit all extra frontmatter fields preserved from the original file
+  if (hasExtra) {
+    for (const [key, value] of Object.entries(agent.extraFrontmatter!)) {
+      if (Array.isArray(value)) {
+        yamlLines.push(`${key}:`);
+        for (const item of value) {
+          yamlLines.push(`  - ${String(item)}`);
+        }
+      } else if (typeof value === 'object' && value !== null) {
+        // Nested objects — render as indented YAML
+        yamlLines.push(`${key}:`);
+        for (const [subKey, subVal] of Object.entries(value as Record<string, unknown>)) {
+          yamlLines.push(`  ${subKey}: ${String(subVal)}`);
+        }
+      } else {
+        yamlLines.push(`${key}: ${String(value)}`);
+      }
     }
   }
 

@@ -91,8 +91,8 @@ export async function evolve(
     }
   }
 
-  // Seeded RNG for Thompson Sampling (deterministic per-run)
-  let rngState = 42;
+  // Seeded RNG for Thompson Sampling (deterministic per-run, per-branch via rngSeed)
+  let rngState = evolveConfig.rngSeed ?? 42;
   const rng = (): number => {
     rngState = (rngState * 1664525 + 1013904223) & 0xffffffff;
     return (rngState >>> 0) / 0x100000000;

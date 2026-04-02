@@ -54,6 +54,7 @@ export interface AgentNode {
   name: string;
   model?: string;
   disallowedTools?: string[];
+  extraFrontmatter?: Record<string, unknown>;  // preserve all other YAML frontmatter fields
   content: string;
 }
 

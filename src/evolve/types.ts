@@ -68,6 +68,7 @@ export interface EvolveConfig {
   samplingStrategy: 'thompson' | 'uniform';
   klLambda: number;
   pbtBranches: number;
+  rngSeed?: number;  // per-branch seed for Thompson Sampling (default: 42)
 }
 
 // Shape of parsed tasks.yaml

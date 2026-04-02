@@ -139,6 +139,8 @@ export async function runPopulation(
       ...evolveConfig,
       // Disable principal for individual branches — synthesis replaces it
       usePrincipal: false,
+      // Each branch gets its own RNG seed for Thompson Sampling diversity
+      rngSeed: branchConfig.seed,
     };
 
     const branchProgress = onProgress

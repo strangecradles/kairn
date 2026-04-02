@@ -568,6 +568,18 @@ async function parseAgents(harnessPath: string): Promise<AgentNode[]> {
       node.disallowedTools = disallowedTools as string[];
     }
 
+    // Preserve all other frontmatter fields not already handled
+    const knownKeys = new Set(["name", "model", "disallowedTools"]);
+    const extra: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(frontmatter)) {
+      if (!knownKeys.has(key)) {
+        extra[key] = value;
+      }
+    }
+    if (Object.keys(extra).length > 0) {
+      node.extraFrontmatter = extra;
+    }
+
     nodes.push(node);
   }
 
@@ -596,9 +608,11 @@ async function parseSkills(harnessPath: string): Promise<SkillNode[]> {
       const name = entry.replace(/\.md$/, "");
       nodes.push({ name, content });
     } else if (await isDirectory(entryPath)) {
-      // Directory — look for skill.md inside
-      const skillMdPath = path.join(entryPath, "skill.md");
-      const content = await readFileSafe(skillMdPath);
+      // Directory — look for skill.md or SKILL.md inside (case-insensitive)
+      let content = await readFileSafe(path.join(entryPath, "skill.md"));
+      if (content === null) {
+        content = await readFileSafe(path.join(entryPath, "SKILL.md"));
+      }
       if (content === null) continue;
       nodes.push({ name: entry, content });
     }
