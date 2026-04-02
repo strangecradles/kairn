@@ -667,9 +667,10 @@ evolveCommand
   .command('apply')
   .description('Apply the best evolved harness to your project')
   .option('--iter <n>', 'Apply a specific iteration instead of the best')
+  .option('--pbt', 'Apply best PBT result (branch winner or synthesis)')
   .option('--force', 'Apply even if git working tree is dirty')
   .option('--no-commit', 'Skip automatic git commit after applying')
-  .action(async (options: { iter?: string; force?: boolean; commit?: boolean }) => {
+  .action(async (options: { iter?: string; pbt?: boolean; force?: boolean; commit?: boolean }) => {
     try {
       const projectRoot = process.cwd();
       const workspace = path.join(projectRoot, '.kairn-evolve');
@@ -694,7 +695,7 @@ evolveCommand
         }
       }
 
-      const result = await applyEvolution(workspace, projectRoot, targetIteration);
+      const result = await applyEvolution(workspace, projectRoot, targetIteration, options.pbt);
 
       // Show diff preview
       if (result.diffPreview) {

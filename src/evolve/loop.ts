@@ -225,10 +225,12 @@ export async function evolve(
       aggregate = applyKLPenalty(rawAggregate, iterComplexityCost, evolveConfig.klLambda);
     }
 
-    // Thompson Sampling: update beliefs with results
+    // Thompson Sampling: update beliefs with EVALUATED results only
+    // Carried-forward scores are stale — treating them as fresh observations
+    // makes the sampler artificially overconfident and freezes beliefs.
     if (useThompson) {
       const scoreMap: Record<string, number> = {};
-      for (const [taskId, score] of Object.entries(results)) {
+      for (const [taskId, score] of Object.entries(evalResults)) {
         scoreMap[taskId] = score.score ?? (score.pass ? 100 : 0);
       }
       beliefs = updateBeliefs(beliefs, scoreMap);
