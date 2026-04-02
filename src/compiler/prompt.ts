@@ -313,12 +313,20 @@ Merge this into the settings hooks alongside the PreToolUse and PostToolUse hook
   - \`@qa-orchestrator\` (sonnet) — delegates to linter and e2e-tester, compiles QA report
   - \`@linter\` (haiku) — runs formatters, linters, security scanners
   - \`@e2e-tester\` (sonnet, only when Playwright is in tools) — browser-based QA via Playwright
-- Development pipeline agents (used by /project:develop):
-  - \`@architect\` (opus) — conducts spec interview with user, writes confirmed spec to docs/SPRINT.md with numbered acceptance criteria. Your spec is a CONTRACT — the verifier will check every criterion. Vague criteria = guaranteed rework.
-  - \`@planner\` (opus) — reads spec and codebase, creates step-by-step implementation plan in docs/PLAN.md
-  - \`@implementer\` (sonnet) — TDD-focused implementation, writes failing tests then minimum code to pass
-  - \`@fixer\` (sonnet) — targeted bug fixing from verifier/review feedback
-  - \`@doc-updater\` (haiku) — extracts decisions and learnings from completed work, updates docs/DECISIONS.md and docs/LEARNINGS.md
+- A "Model Selection" section in generated agents:
+  \`\`\`
+  ## Model Selection (all agents)
+  - Haiku: simple file edits, linting, formatting, doc updates (<50 lines changed)
+  - Sonnet: implementation, testing, debugging, code review (50-500 lines)
+  - Opus: architecture decisions, spec writing, complex refactors (>500 lines or cross-cutting)
+  Default: Sonnet. Only escalate to Opus when the task involves multi-file architecture or ambiguous requirements.
+  \`\`\`
+- Development pipeline agents (used by /project:develop). Each agent should include a modelRouting field in its YAML frontmatter:
+  - \`@architect\` (default: opus) — conducts spec interview with user, writes confirmed spec to docs/SPRINT.md with numbered acceptance criteria. Your spec is a CONTRACT — the verifier will check every criterion. Vague criteria = guaranteed rework.
+  - \`@planner\` (default: sonnet, escalate to opus for cross-cutting changes) — reads spec and codebase, creates step-by-step implementation plan in docs/PLAN.md
+  - \`@implementer\` (default: sonnet, escalate to opus for cross-cutting changes) — TDD-focused implementation, writes failing tests then minimum code to pass
+  - \`@fixer\` (default: sonnet, use haiku for single-file fixes) — targeted bug fixing from verifier/review feedback
+  - \`@doc-updater\` (default: haiku) — extracts decisions and learnings from completed work, updates docs/DECISIONS.md and docs/LEARNINGS.md
 - \`/project:spec\` command (interview-based spec creation — asks 5-8 questions one at a time, writes structured spec to docs/SPRINT.md with ## Acceptance Criteria containing 3-8 numbered, testable conditions. Each criterion must be independently verifiable. Does NOT start coding until confirmed)
 - \`/project:prove\` command (runs tests, shows git diff vs main, rates confidence HIGH/MEDIUM/LOW with evidence)
 - \`/project:grill\` command (adversarial code review — challenges each change with "why this approach?", "what if X input?", rates BLOCKER/SHOULD-FIX/NITPICK, blocks until BLOCKERs resolved)
