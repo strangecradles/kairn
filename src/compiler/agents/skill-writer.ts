@@ -123,6 +123,7 @@ export async function generateSkills(
   const raw = await callLLM(config, userMessage, {
     systemPrompt: SYSTEM_PROMPT,
     cacheControl: true,
+    maxTokens: task.max_tokens,
   });
 
   const skills = parseSkillNodes(raw);

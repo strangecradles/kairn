@@ -135,7 +135,7 @@ export async function generateDocs(
   const rawResponse = await callLLM(config, userMessage, {
     systemPrompt: DOC_WRITER_SYSTEM_PROMPT,
     cacheControl: true,
-    maxTokens: 4096,
+    maxTokens: task.max_tokens,
   });
 
   const parsedDocs = parseDocResponse(rawResponse);

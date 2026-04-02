@@ -178,7 +178,7 @@ export async function generateRules(
   const raw = await callLLM(config, userMessage, {
     systemPrompt: SYSTEM_PROMPT,
     cacheControl: true,
-    maxTokens: 8192,
+    maxTokens: task.max_tokens,
   });
 
   const parsedRules = parseRulesJSON(raw);

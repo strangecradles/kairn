@@ -254,7 +254,7 @@ export async function generateAgents(
     const response = await callLLM(config, userMessage, {
       systemPrompt: AGENT_WRITER_SYSTEM_PROMPT,
       cacheControl: true,
-      maxTokens: 4096,
+      maxTokens: task.max_tokens,
     });
 
     const rawAgents = parseAgentResponse(response);

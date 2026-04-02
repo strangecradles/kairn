@@ -217,12 +217,14 @@ async function generateBatch(
   skeleton: SkeletonSpec,
   batchItems: string[],
   config: KairnConfig,
+  maxTokens: number,
   phaseAContext?: string,
 ): Promise<CommandNode[]> {
   const userMessage = buildUserMessage(intent, skeleton, batchItems, phaseAContext);
   const responseText = await callLLM(config, userMessage, {
     systemPrompt: SYSTEM_PROMPT,
     cacheControl: true,
+    maxTokens,
   });
   const rawCommands = parseCommandResponse(responseText);
   return rawCommands.map((c) =>
@@ -266,14 +268,14 @@ export async function generateCommands(
     const batchResults: CommandNode[][] = [];
 
     for (const batch of batches) {
-      const nodes = await generateBatch(intent, skeleton, batch, config);
+      const nodes = await generateBatch(intent, skeleton, batch, config, task.max_tokens, task.context_hint);
       batchResults.push(nodes);
     }
 
     allCommands = deduplicateCommands(batchResults.flat());
   } else {
     // Single call mode
-    allCommands = await generateBatch(intent, skeleton, task.items, config);
+    allCommands = await generateBatch(intent, skeleton, task.items, config, task.max_tokens, task.context_hint);
   }
 
   // Ensure help command exists
