@@ -26,7 +26,7 @@ You must output a JSON object matching the SkeletonSpec schema.
 - MCP servers: maximum 6. Prefer fewer.
 - Skills: maximum 3. Only include directly relevant ones.
 - Agents: maximum 5. Orchestration pipeline (/develop) agents.
-- Hooks: maximum 4 (auto-format, block-destructive, PostCompact, plus one contextual).
+- Hooks: maximum 5 (auto-format, block-destructive, PostCompact, memory-persistence, plus one contextual).
 
 If the workflow doesn't clearly need a tool, DO NOT include it.
 Each MCP server costs 500-2000 tokens of context window.
@@ -307,6 +307,12 @@ For projects with multi-session workflows, include SessionStart/End hooks that p
 
 This ensures accumulated project knowledge survives session boundaries.
 
+## Persistence Routing Hook
+
+For code projects with autonomy level 3+, include a \`UserPromptSubmit\` hook that routes complex tasks through \`/project:persist\`.
+Generate \`.claude/hooks/persist-router.mjs\` (the routing logic) and add a \`UserPromptSubmit\` hook entry in settings.json that invokes it.
+Also add \`"persistence_routing": "auto"\` (level 3-4) or \`"persistence_routing": "manual"\` (level 1-2) to settings.json.
+
 ## For Code Projects, Additionally Include
 
 - \`/project:plan\` command (plan before coding)
@@ -344,6 +350,13 @@ This ensures accumulated project knowledge survives session boundaries.
 - \`/project:prove\` command (runs tests, shows git diff vs main, rates confidence HIGH/MEDIUM/LOW with evidence)
 - \`/project:grill\` command (adversarial code review — challenges each change with "why this approach?", "what if X input?", rates BLOCKER/SHOULD-FIX/NITPICK, blocks until BLOCKERs resolved)
 - \`/project:reset\` command (reads DECISIONS.md and LEARNINGS.md, proposes clean restart, stashes current work, implements elegant solution)
+- \`/project:persist\` command (persistent execution loop — reads acceptance criteria from docs/SPRINT.md, works criterion-by-criterion with structured progress tracking in .claude/progress.json, auto-retries on verification failure up to 3 times per criterion, delegates to @grill for review gate before completion, resumes from progress.json if session was interrupted). The command protocol:
+  1. Load or initialize .claude/progress.json from docs/SPRINT.md numbered acceptance criteria
+  2. For each incomplete criterion: implement, run verification (build/test/typecheck/lint), mark PASSED or retry (max 3 attempts per criterion, mark BLOCKED after 3 failures)
+  3. After all criteria attempted: if any BLOCKED report which and why; if all PASSED proceed to review gate
+  4. Review gate: delegate to @grill for adversarial review; fix blockers if found (max 1 fix cycle)
+  5. Persist state: write final progress.json; include progress summary in memory.json for session resume
+  Resume protocol: when progress.json exists, skip PASSED criteria, resume from first non-PASSED criterion, carry forward failure notes from prior attempts.
 
 ## For Research Projects, Additionally Include
 
@@ -388,7 +401,7 @@ Return ONLY valid JSON matching this structure:
 \`\`\`json
 {
   "claude_md": "Full CLAUDE.md content (under 150 lines)",
-  "commands": { "help": "...", "develop": "...", "status": "...", "fix": "...", "sprint": "...", "spec": "...", "prove": "...", "grill": "...", "reset": "..." },
+  "commands": { "help": "...", "develop": "...", "status": "...", "fix": "...", "sprint": "...", "spec": "...", "prove": "...", "grill": "...", "reset": "...", "persist": "..." },
   "rules": { "continuity": "...", "security": "..." },
   "agents": { "architect": "...", "planner": "...", "implementer": "...", "fixer": "...", "doc-updater": "...", "qa-orchestrator": "...", "linter": "...", "e2e-tester": "..." },
   "skills": { "skill-name/SKILL": "..." },
@@ -548,7 +561,7 @@ Do not add generic filler. Every line must be specific to the user's workflow.
 - Skills: maximum 3. Only include directly relevant ones.
 - Agents: maximum 5. Orchestration pipeline (/develop) agents.
 - Commands: no limit (loaded on demand, zero context cost).
-- Hooks: maximum 4 (auto-format, block-destructive, PostCompact, plus one contextual).
+- Hooks: maximum 5 (auto-format, block-destructive, PostCompact, memory-persistence, plus one contextual).
 
 If the workflow doesn't clearly need a tool, DO NOT include it.
 Each MCP server costs 500-2000 tokens of context window.
@@ -577,7 +590,8 @@ Return ONLY valid JSON matching this structure:
     },
     "commands": {
       "help": "markdown content for /project:help",
-      "develop": "markdown content for /project:develop"
+      "develop": "markdown content for /project:develop",
+      "persist": "markdown content for /project:persist"
     },
     "rules": {
       "continuity": "markdown content for continuity rule",

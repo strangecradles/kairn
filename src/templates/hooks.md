@@ -157,24 +157,72 @@ saves recent decisions, sprint status, and known gotchas. On SessionStart,
 loads and injects as additionalContext.
 
 ### SessionEnd Hook (save context)
+
+Saves decisions, sprint status, gotchas, and persistence loop state (if active).
+When `.claude/progress.json` exists with status `in_progress`, includes a
+persistence summary in `memory.json` so the next session knows to resume.
+
 ```json
 {
   "matcher": "",
   "hooks": [{
     "type": "command",
-    "command": "MEMORY=$(jq -n --arg decisions \"$(tail -20 .claude/docs/DECISIONS.md 2>/dev/null)\" --arg sprint \"$(head -30 .claude/docs/SPRINT.md 2>/dev/null)\" --arg gotchas \"$(grep -A1 '^-' .claude/CLAUDE.md 2>/dev/null | grep -v 'none yet' | head -10)\" '{decisions: $decisions, sprint: $sprint, gotchas: $gotchas, timestamp: now | todate}') && echo \"$MEMORY\" > .claude/memory.json"
+    "command": "MEMORY=$(jq -n --arg decisions \"$(tail -20 .claude/docs/DECISIONS.md 2>/dev/null)\" --arg sprint \"$(head -30 .claude/docs/SPRINT.md 2>/dev/null)\" --arg gotchas \"$(grep -A1 '^-' .claude/CLAUDE.md 2>/dev/null | grep -v 'none yet' | head -10)\" --argjson persistence \"$(if [ -f .claude/progress.json ]; then jq '{active: (.status == \"in_progress\"), criteriaTotal: (.criteria | length), criteriaPassed: ([.criteria[] | select(.status == \"passed\")] | length), nextCriterion: ([.criteria[] | select(.status != \"passed\")][0].id // null)}' .claude/progress.json 2>/dev/null || echo '{\"active\":false}'; else echo '{\"active\":false}'; fi)\" '{decisions: $decisions, sprint: $sprint, gotchas: $gotchas, persistence: $persistence, timestamp: now | todate}') && echo \"$MEMORY\" > .claude/memory.json"
   }]
 }
 ```
 
 ### SessionStart Hook (load context)
+
+Loads persisted memory. When `persistence.active` is true, adds a resume
+prompt so the agent knows there's an in-progress persistence loop.
+
 ```json
 {
   "matcher": "",
   "hooks": [{
     "type": "command",
-    "command": "if [ -f .claude/memory.json ]; then MEMORY=$(cat .claude/memory.json) && printf '{\"continue\":true,\"hookSpecificOutput\":{\"hookEventName\":\"SessionStart\",\"additionalContext\":\"RESTORED SESSION MEMORY:\\n%s\"}}' \"$MEMORY\"; else echo '{\"continue\":true}'; fi"
+    "command": "if [ -f .claude/memory.json ]; then MEMORY=$(cat .claude/memory.json) && PERSIST_MSG=$(echo \"$MEMORY\" | jq -r 'if .persistence.active then \"\\nACTIVE PERSISTENCE LOOP: \" + (.persistence.criteriaPassed|tostring) + \"/\" + (.persistence.criteriaTotal|tostring) + \" criteria passed. Resume with /project:persist or continue manually.\" else \"\" end' 2>/dev/null) && printf '{\"continue\":true,\"hookSpecificOutput\":{\"hookEventName\":\"SessionStart\",\"additionalContext\":\"RESTORED SESSION MEMORY:\\n%s%s\"}}' \"$MEMORY\" \"$PERSIST_MSG\"; else echo '{\"continue\":true}'; fi"
   }]
+}
+```
+
+## Persistence Routing (UserPromptSubmit)
+
+For code projects with autonomy level 3+, include a `UserPromptSubmit` hook that
+detects complex tasks and routes them through `/project:persist`.
+
+The hook is generated as `.claude/hooks/persist-router.mjs` — an ESM module
+that reads the prompt, scores complexity signals, and injects routing context.
+
+Complexity signals (2+ triggers routing in `auto` mode):
+- Multi-step: "then", "after that", numbered steps
+- Feature scope: "add/implement/build" + noun phrases (auth, api, endpoint, etc.)
+- Refactor scope: "migrate/convert/replace/upgrade"
+- Bug with reproduction: "when X happens", "steps to reproduce"
+- Explicit: "persist", "keep working", "until done"
+- Long prompt: >50 words
+
+Pass-through (no routing):
+- Questions, lookups, single-file edits, existing `/project:` commands
+
+Configuration via `persistence_routing` in settings.json:
+- `auto` (default for L3-4): route when 2+ complexity signals detected
+- `manual` (default for L1-2): route only on explicit keywords
+- `off`: never auto-route
+
+```json
+{
+  "hooks": {
+    "UserPromptSubmit": [{
+      "matcher": "*",
+      "hooks": [{
+        "type": "command",
+        "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/persist-router.mjs\"",
+        "timeout": 5
+      }]
+    }]
+  }
 }
 ```
 
@@ -188,6 +236,7 @@ loads and injects as additionalContext.
 | PostCompact re-inject | Short sessions, simple projects |
 | PostCompact full reset | Long sessions (>2h), complex projects |
 | Memory persistence | All projects with multi-session workflows |
+| Persistence routing | Code projects, autonomy level 3+ |
 | Desktop notification | macOS users |
 | Sound on complete | Power users |
 

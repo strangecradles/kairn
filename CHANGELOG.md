@@ -7,6 +7,22 @@ This project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [2.10.0] — 2026-04-02
+
+### Added
+- **`/project:persist` command** — persistent execution loop generated in every code project harness. Reads acceptance criteria from `docs/SPRINT.md`, works criterion-by-criterion with structured progress tracking in `.claude/progress.json`, auto-retries on verification failure (max 3 per criterion), delegates to `@grill` for review gate before completion, resumes from `progress.json` on session restart
+- **Persist-router hook** (`persist-router.mjs`) — `UserPromptSubmit` hook that detects complex tasks via 6 complexity signals (multi-step, feature-scope, refactor-scope, bug-with-repro, explicit, long-prompt) and routes them through `/project:persist`. Configurable: `persistence_routing: auto | manual | off`
+- **Persistence-aware memory hooks** — `SessionEnd` now includes `progress.json` summary in `memory.json` when a persistence loop is active; `SessionStart` shows resume prompt with criteria progress count
+- **`persistence-completion` eval template** — measures whether the persistence loop completes multi-criterion tasks. Rubric checks: all criteria met, structured tracking used, tests pass, review gate executed. Added to feature-development, full-stack, api-building, and maintenance workflow mappings
+- **Autonomy-level routing** — `persistence_routing` automatically set by autonomy level: `manual` (L1-2), `auto` (L3-4)
+
+### Changed
+- Context budget increased from 4 to 5 hooks (auto-format, block-destructive, PostCompact, memory-persistence, plus one contextual)
+- HARNESS_PROMPT and SYSTEM_PROMPT output schemas include `persist` command
+- Hook selection guide includes persistence routing recommendation
+
+---
+
 ## [2.9.0] — 2026-04-02
 
 ### Added

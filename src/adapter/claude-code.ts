@@ -21,6 +21,87 @@ const ENV_LOADER_HOOK = {
   }],
 };
 
+const PERSIST_ROUTER_TEMPLATE = `import { readFileSync } from 'fs';
+
+const input = JSON.parse(readFileSync('/dev/stdin', 'utf8'));
+const prompt = (input.prompt ?? '').trim();
+
+// Pass-through patterns (fast exit)
+const PASSTHROUGH = /^(what|how|why|where|when|can you|does|is |show me|find |search |list |\\/project:)/i;
+const SINGLE_FILE = /^(edit|fix the typo|update the comment|change the|rename) .{3,60}$/i;
+
+if (PASSTHROUGH.test(prompt) || SINGLE_FILE.test(prompt) || prompt.length < 20) {
+  process.stdout.write(JSON.stringify({ continue: true }));
+  process.exit(0);
+}
+
+// Check config for routing mode
+let routingMode = 'auto';
+try {
+  const settings = JSON.parse(readFileSync('.claude/settings.json', 'utf8'));
+  routingMode = settings.persistence_routing ?? 'auto';
+} catch { /* default to auto */ }
+
+if (routingMode === 'off') {
+  process.stdout.write(JSON.stringify({ continue: true }));
+  process.exit(0);
+}
+
+// Complexity signals
+const signals = [];
+
+if (/\\b(then|after that|and also|next|finally|step \\d|first .* then)\\b/i.test(prompt)) {
+  signals.push('multi-step');
+}
+if (/\\b(add|implement|build|create|integrate|set up)\\b.*\\b(feature|auth|api|endpoint|page|component|module|service|database|migration)\\b/i.test(prompt)) {
+  signals.push('feature-scope');
+}
+if (/\\b(migrate|convert|replace|upgrade|refactor|rewrite|restructure)\\b/i.test(prompt)) {
+  signals.push('refactor-scope');
+}
+if (/\\b(when .* happens|steps to reproduce|broken|crash|regression|fails when)\\b/i.test(prompt)) {
+  signals.push('bug-with-repro');
+}
+if (/\\b(persist|keep working|don't stop|until done|until .* pass)\\b/i.test(prompt)) {
+  signals.push('explicit');
+}
+if (prompt.split(/\\s+/).length > 50) {
+  signals.push('long-prompt');
+}
+
+const shouldRoute = routingMode === 'manual'
+  ? signals.includes('explicit')
+  : signals.length >= 2 || signals.includes('explicit');
+
+if (shouldRoute) {
+  process.stdout.write(JSON.stringify({
+    continue: true,
+    hookSpecificOutput: {
+      hookEventName: 'UserPromptSubmit',
+      additionalContext: [
+        'PERSISTENCE ROUTING: This task has complexity signals (' + signals.join(', ') + ').',
+        'Execute this using the /project:persist workflow:',
+        '1. Ensure acceptance criteria exist in docs/SPRINT.md (create from this prompt if needed)',
+        '2. Initialize .claude/progress.json',
+        '3. Work criterion-by-criterion until all pass',
+        '4. Run review gate before marking complete',
+      ].join('\\n'),
+    },
+  }));
+} else {
+  process.stdout.write(JSON.stringify({ continue: true }));
+}
+`;
+
+const PERSIST_ROUTER_HOOK = {
+  matcher: '',
+  hooks: [{
+    type: 'command',
+    command: 'node "$CLAUDE_PROJECT_DIR/.claude/hooks/persist-router.mjs"',
+    timeout: 5,
+  }],
+};
+
 function resolveSettings(
   spec: EnvironmentSpec,
   options?: { hasEnvVars?: boolean }
@@ -41,6 +122,16 @@ function resolveSettings(
     const sessionStart = (hooks.SessionStart ?? []) as unknown[];
     sessionStart.push(ENV_LOADER_HOOK);
     hooks.SessionStart = sessionStart;
+    base.hooks = hooks;
+  }
+
+  // Add persist-router hook for L3+ code projects
+  // (persistence_routing is set by applyAutonomyLevel for all levels)
+  if (isCodeProject(spec) && (spec.autonomy_level ?? 1) >= 3) {
+    const hooks = (base.hooks ?? {}) as Record<string, unknown[]>;
+    const userPromptSubmit = (hooks.UserPromptSubmit ?? []) as unknown[];
+    userPromptSubmit.push(PERSIST_ROUTER_HOOK);
+    hooks.UserPromptSubmit = userPromptSubmit;
     base.hooks = hooks;
   }
 
@@ -160,6 +251,11 @@ export function buildFileMap(
     }
   }
 
+  // Persist-router hook for L3+ code projects
+  if (isCodeProject(spec) && (spec.autonomy_level ?? 1) >= 3) {
+    files.set('.claude/hooks/persist-router.mjs', PERSIST_ROUTER_TEMPLATE);
+  }
+
   return files;
 }
 
@@ -258,6 +354,13 @@ export async function writeEnvironment(
       await writeFile(logPath, '');
       written.push('.claude/hooks/intent-log.jsonl');
     }
+  }
+
+  // 10. Persist-router hook for L3+ code projects
+  if (isCodeProject(spec) && (spec.autonomy_level ?? 1) >= 3) {
+    const p = path.join(claudeDir, "hooks", "persist-router.mjs");
+    await writeFile(p, PERSIST_ROUTER_TEMPLATE);
+    written.push('.claude/hooks/persist-router.mjs');
   }
 
   return written;

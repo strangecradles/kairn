@@ -371,38 +371,38 @@ Full plan: [`PLAN-v2.7.0.md`](PLAN-v2.7.0.md)
 - [x] **Expanded security rules** — PreToolUse patterns from 5 to 20+ (credential leaks, injection, destructive ops, network)
 - [x] **Pruning policy** — principle: harness complexity should decrease as models improve
 
-### v2.10.0 — Persistent Execution Loop [NEXT]
+### v2.10.0 ✅ SHIPPED — Persistent Execution Loop ([design doc](docs/design/v2.10-persistent-execution.md))
 > Inspired by OMC's Ralph loop. The single biggest gap between Kairn-generated harnesses and production agent workflows: persistence. Today, `/project:develop` runs once linearly. If it fails, the user restarts manually. A persistence loop keeps working until all acceptance criteria pass, tracks progress across retries, and auto-routes complex tasks through the loop.
 
 **Core: `/project:persist` command (generated in every harness)**
-- [ ] PRD-driven persistence loop: reads acceptance criteria from `docs/SPRINT.md`, works story-by-story until all pass
-- [ ] Structured progress tracking in `.claude/progress.json` — what's done, what failed, what's next
-- [ ] Auto-retry on verification failure — if a criterion fails, loop back to fix (max 3 retries per criterion)
-- [ ] Reviewer gate before completion — delegates to `@grill` or `@reviewer` agent before marking done
-- [ ] Session-persistent via `memory.json` — if the session ends mid-loop, next session resumes from `.claude/progress.json`
+- [x] PRD-driven persistence loop: reads acceptance criteria from `docs/SPRINT.md`, works story-by-story until all pass
+- [x] Structured progress tracking in `.claude/progress.json` — what's done, what failed, what's next
+- [x] Auto-retry on verification failure — if a criterion fails, loop back to fix (max 3 retries per criterion)
+- [x] Reviewer gate before completion — delegates to `@grill` or `@reviewer` agent before marking done
+- [x] Session-persistent via `memory.json` — if the session ends mid-loop, next session resumes from `.claude/progress.json`
 
 **Auto-routing hook: detect tasks that benefit from persistence**
-- [ ] `UserPromptSubmit` hook analyzes incoming prompts for complexity signals:
+- [x] `UserPromptSubmit` hook analyzes incoming prompts for complexity signals:
   - Multi-step tasks ("implement X then Y then Z")
   - Feature requests ("add authentication with OAuth")
   - Refactors ("migrate from X to Y")
   - Bug fixes with reproduction steps ("when X happens, Y breaks")
-- [ ] Routes matching prompts through `/project:persist` instead of one-shot execution
-- [ ] Simple tasks (questions, single file edits, lookups) pass through normally
-- [ ] Configurable: `persistence_routing: auto | manual | off` in harness config
+- [x] Routes matching prompts through `/project:persist` instead of one-shot execution
+- [x] Simple tasks (questions, single file edits, lookups) pass through normally
+- [x] Configurable: `persistence_routing: auto | manual | off` in harness config
 
 **What this extracts from OMC Ralph (distilled, not copied):**
-- [ ] Story-by-story acceptance tracking (OMC's `prd.json` → our `progress.json`)
-- [ ] Retry-until-done loop (OMC's iteration counter → our criterion-level retry)
-- [ ] Reviewer verification gate (OMC's architect pass → our `@grill` agent)
-- [ ] Session persistence (OMC's state files → our `memory.json` + `progress.json`)
-- [ ] NOT copied: OMC's 150 skills, ultrawork parallelism, tmux workers, plugin system — those are OMC-specific complexity that most projects don't need
+- [x] Story-by-story acceptance tracking (OMC's `prd.json` → our `progress.json`)
+- [x] Retry-until-done loop (OMC's iteration counter → our criterion-level retry)
+- [x] Reviewer verification gate (OMC's architect pass → our `@grill` agent)
+- [x] Session persistence (OMC's state files → our `memory.json` + `progress.json`)
+- [x] NOT copied: OMC's 150 skills, ultrawork parallelism, tmux workers, plugin system — those are OMC-specific complexity that most projects don't need
 
 **Implementation in HARNESS_PROMPT:**
-- [ ] `/project:persist` command template added to "For Code Projects, Additionally Include"
-- [ ] `UserPromptSubmit` routing hook template added to hooks.md
-- [ ] `progress.json` schema defined (stories, criteria, status, retries, timestamps)
-- [ ] Evolve eval template: `persistence-completion` — test that the loop actually completes multi-step tasks
+- [x] `/project:persist` command template added to "For Code Projects, Additionally Include"
+- [x] `UserPromptSubmit` routing hook template added to hooks.md
+- [x] `progress.json` schema defined (stories, criteria, status, retries, timestamps)
+- [x] Evolve eval template: `persistence-completion` — test that the loop actually completes multi-step tasks
 
 ### v2.11.0 — Polish & Integration
 - [ ] `kairn evolve watch` — live dashboard during evolution (progress, scores, current mutation)

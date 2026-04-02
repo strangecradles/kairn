@@ -81,7 +81,7 @@ describe("TASK_GENERATION_PROMPT", () => {
 });
 
 describe("EVAL_TEMPLATES", () => {
-  it("has all six eval template entries", () => {
+  it("has all eleven eval template entries", () => {
     const keys = Object.keys(EVAL_TEMPLATES);
     expect(keys).toContain("add-feature");
     expect(keys).toContain("fix-bug");
@@ -93,7 +93,8 @@ describe("EVAL_TEMPLATES", () => {
     expect(keys).toContain("workflow-compliance");
     expect(keys).toContain("rule-compliance");
     expect(keys).toContain("intent-routing");
-    expect(keys).toHaveLength(10);
+    expect(keys).toContain("persistence-completion");
+    expect(keys).toHaveLength(11);
   });
 
   it("each template has required metadata fields", () => {
