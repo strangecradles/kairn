@@ -404,7 +404,49 @@ Full plan: [`PLAN-v2.7.0.md`](PLAN-v2.7.0.md)
 - [x] `progress.json` schema defined (stories, criteria, status, retries, timestamps)
 - [x] Evolve eval template: `persistence-completion` — test that the loop actually completes multi-step tasks
 
-### v2.11.0 — Polish & Integration
+### v2.11.0 — Multi-Agent Compilation Pipeline ([design doc](docs/design/v2.11-multi-agent-compilation.md))
+> The monolithic Pass 2 LLM call produces a ~16K token JSON blob — hitting truncation limits and capping harness quality. Decompose compilation into specialist agents that each produce typed HarnessIR nodes, orchestrated by an LLM planner. Unifies compilation and evolution around the same IR representation. Scales to swarm-sized environments (100+ agents).
+
+**Architecture: Orchestrator → DAG of Specialists → Linker → HarnessIR**
+
+**@orchestrator (LLM planner):**
+- [ ] Reads skeleton + intent, emits `CompilationPlan` (phases, agents, items, dependencies, token budgets)
+- [ ] Decides command/agent/rule granularity based on project complexity
+- [ ] Partitions large compilations into batches (scales to 200+ agents for swarm use cases)
+
+**Specialist agents (parallel, typed output):**
+- [ ] `@sections-writer` → `Section[]` (CLAUDE.md content following mandatory template)
+- [ ] `@command-writer` → `CommandNode[]` (`!` shell integration, `$ARGUMENTS`, orchestration prompts)
+- [ ] `@agent-writer` → `AgentNode[]` (YAML frontmatter, `modelRouting`, persona design)
+- [ ] `@rule-writer` → `RuleNode[]` (path-scoped YAML frontmatter, constraint format)
+- [ ] `@doc-writer` → `DocNode[]` (DECISIONS.md, LEARNINGS.md, SPRINT.md templates)
+- [ ] `@skill-writer` → `SkillNode[]` (TDD skill, research skill, etc.)
+
+**Cross-reference validation:**
+- [ ] `@linker` validates `@agent` mentions in commands, command references in agents, rule scope coverage
+- [ ] Patches broken cross-references before assembly
+
+**Batch execution engine:**
+- [ ] `executePlan()` with topological phase ordering and concurrency control
+- [ ] Reuses `runWithConcurrency` pattern from evolve runner
+- [ ] Configurable concurrency: 3-4 (API key), 1-2 (OAuth), via `--concurrency` flag
+
+**HarnessIR as compilation output:**
+- [ ] `compile()` produces `HarnessIR` directly (not flat JSON strings)
+- [ ] `EnvironmentSpec.harness` updated to reference `HarnessIR`
+- [ ] Adapters (claude-code, hermes-agent) consume `HarnessIR` via renderer
+- [ ] Evolve loop receives `HarnessIR` directly from compilation (no re-parse)
+
+**Truncation detection:**
+- [ ] `callLLM()` checks `stop_reason === 'max_tokens'` and throws `TruncationError`
+- [ ] Per-agent retry with increased budget or batch splitting
+
+**UX: Multi-phase progress display:**
+- [ ] Phase-by-phase progress (Pass 2 plan → Pass 3a parallel → Pass 3b parallel → Pass 3c linker)
+- [ ] Per-agent retry visibility (`⚠ @agent-writer truncated, retrying...`)
+- [ ] Individual agent failure isolation (one agent fails ≠ whole compilation fails)
+
+### v2.12.0 — Polish & Integration
 - [ ] `kairn evolve watch` — live dashboard during evolution (progress, scores, current mutation)
 - [ ] Integration with `kairn describe` ("generate, then auto-evolve for 3 iterations")
 - [ ] Integration with `kairn optimize` ("audit, then evolve the fixes")

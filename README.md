@@ -4,7 +4,7 @@
 
 Kairn is a CLI that compiles natural language descriptions into minimal, optimal [Claude Code](https://code.claude.com/) agent environments — complete with MCP servers, slash commands, skills, subagents, rules, and security. Then it uses **automated evolution** (inspired by [Meta-Harness](https://yoonholee.com/meta-harness/), Stanford IRIS Lab 2026) to improve them through real-world task execution.
 
-**v2.5.0** adds **Intent-Aware Harnesses** — project-specific routing that intercepts natural language and activates the right command. Two-tier: fast regex (Tier 1) + semantic Haiku fallback (Tier 2). Self-learning — the harness learns your vocabulary over time.
+**v2.10.0** adds **Persistent Execution Loops** — `/project:persist` tracks acceptance criteria, retries on failure, and resumes across sessions. Auto-routing detects complex tasks and channels them through the persistence loop. Previous highlights: population-based evolution (v2.6), structured HarnessIR (v2.7), intent-aware routing (v2.5), and Anthropic harness patterns (v2.9).
 
 **No servers. No accounts. No telemetry. Runs locally with your own LLM key.**
 
@@ -96,7 +96,7 @@ kairn describe "Research ML papers on GRPO training and summarize" --quick
 
 **Features:**
 - **Interactive clarification** — 3-5 yes/no questions to refine your workflow (skip with `--quick`)
-- **Multi-pass compilation** — Skeleton pass (tool selection) + Harness pass (content generation) + deterministic settings
+- **Multi-pass compilation** — Skeleton pass (tool selection) → multi-agent harness generation → deterministic settings
 - **Autonomy levels** — Choose how autonomous (1-4, default 2):
   - **Level 1 (Guided):** Manual workflow with `/project:tour`, help, and guidance
   - **Level 2 (Assisted):** `/project:loop` for workflow automation, `@pm` agent for planning
@@ -303,10 +303,10 @@ Kairn ships with **28 curated MCP servers** across 8 categories. Tools are auto-
 1. **User input** — intent string or scanned project profile
 2. **Clarification** (optional) — 3-5 yes/no questions to refine workflow
 3. **Pass 1: Skeleton** — LLM selects minimal tool set and outlines the project
-4. **Pass 2: Harness** — LLM generates all content (CLAUDE.md, commands, rules, agents, docs)
-5. **Pass 3: Settings** — Deterministic generation of `settings.json` and `.mcp.json` from registry
-6. **Intent patterns** — Compile project-specific regex patterns from command names + synonyms
-7. **Hook templates** — Generate `intent-router.mjs` (Tier 1) and Tier 2 prompt template
+4. **Pass 2: Plan** — @orchestrator reads skeleton, emits a compilation plan (what agents/commands/rules to generate, in what phases)
+5. **Pass 3: Specialist agents** — parallel fan-out to @sections-writer, @command-writer, @agent-writer, @rule-writer, @doc-writer, @skill-writer — each produces typed HarnessIR nodes
+6. **Pass 3c: Linker** — validates cross-references between commands ↔ agents ↔ rules
+7. **Pass 4: Assembly** — deterministic generation of `settings.json`, `.mcp.json`, intent patterns, hooks
 8. **Write files** — `.claude/` directory + `.mcp.json` + `.env` (with masked keys)
 
 ### Evolution (kairn evolve run)
@@ -533,18 +533,21 @@ kairn evolve apply     # Copy iteration 2 to .claude/
 ### v1.x ✅ (Complete)
 Local CLI for generating and managing Claude Code environments. Includes advanced patterns (sprint contracts, multi-agent QA, autonomy levels), templates, secrets management, and Claude Code power patterns (TDD, verification, known gotchas).
 
-### v2.x (In Progress)
+### v2.x (Current — v2.10.0)
 **Kairn Evolve** — automated harness optimization.
 
 - **v2.0.0** ✅ Task Definition & Trace Infrastructure
 - **v2.1.0** ✅ The Evolution Loop
-- **v2.2.0** ✅ Diagnosis & Reporting
-- **v2.2.1-2.2.8** ✅ Bug fixes & optimizations
-- **v2.3.0** ⏳ Eval Quality & Auth (Claude Code subscription OAuth, prompt caching)
-- **v2.4.0** ⏳ Intelligent Evolution (principal proposer, experience replay, exploration/exploitation)
-- **v2.5.0** 🔄 Intent-Aware Harnesses (in-progress Ralph loop)
-- **v2.6.0** ⏳ Structured Harness IR (mutations on typed IR, not raw text)
-- **v2.7.0** ⏳ Polish & Integration (dashboard, watch mode, CI/CD integration)
+- **v2.2.x** ✅ Diagnosis, Reporting, Parallel Evaluation, Anti-Regression Guards
+- **v2.3.0** ✅ Eval Quality & Auth (Claude Code subscription OAuth, prompt caching)
+- **v2.5.0** ✅ Intent-Aware Harnesses (two-tier routing: regex + Haiku, self-learning)
+- **v2.6.0** ✅ Population-Based Training (parallel evolution branches, Thompson Sampling, KL regularization)
+- **v2.7.0** ✅ Structured Harness IR (typed mutations, semantic diff, round-trip renderer)
+- **v2.8.0** ✅ Evolution Quality (hybrid scoring, prompt caching, Sonnet proposer, targeted re-eval)
+- **v2.9.0** ✅ Harness Quality: Anthropic Patterns (sprint contracts, model routing, expanded security)
+- **v2.10.0** ✅ Persistent Execution Loop (/project:persist, progress tracking, auto-routing)
+- **v2.11.0** 🔄 Multi-Agent Compilation Pipeline (orchestrator → specialist agents → HarnessIR)
+- **v2.12.0** ⏳ Polish & Integration (dashboard, watch mode, CI/CD, describe→evolve)
 
 ### v3.x (Aspirational)
 Broader harness scope (plugins, external tools), paid tool connections, hosted platform, learning system.

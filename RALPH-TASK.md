@@ -1,181 +1,244 @@
-# Ralph Loop Task — Execute Feature Implementation
+# Ralph Loop Task: v2.11.0 — Multi-Agent Compilation Pipeline
+
+## Context
+
+**Version:** v2.11.0  
+**Branch:** `feature/v2.11.0-multi-agent-compilation`  
+**Design doc:** `docs/design/v2.11-multi-agent-compilation.md`  
+**ROADMAP:** See `ROADMAP.md` → v2.11.0 section  
+**Current state:** main = v2.9.0, feature/v2.10.0 branch ready (936/936 tests pass)
+
+## Goal
+
+Replace the monolithic Pass 2 LLM call in `src/compiler/compile.ts` with a multi-agent pipeline:
+1. **@orchestrator** reads skeleton + intent → emits `CompilationPlan`
+2. **6 specialist agents** execute in parallel phases → produce typed `HarnessIR` nodes
+3. **@linker** validates cross-references
+4. **Assembly** merges into `HarnessIR` → adapters render to files
+
+This fixes the JSON truncation bug (Unterminated string at position 25629) and produces higher quality harnesses.
+
+## Pre-Steps (before Phase 1)
+
+1. Merge v2.10.0 to main: `git checkout main && git merge feature/v2.10.0-persistent-execution`
+2. Bump version: edit package.json to 2.11.0
+3. Create feature branch: `git checkout -b feature/v2.11.0-multi-agent-compilation`
+4. Commit the design doc, ROADMAP, and README changes already staged
+
+## Implementation Plan
+
+Read `docs/design/v2.11-multi-agent-compilation.md` for full design. Here are the ordered steps:
+
+### Step 1: Types & Infrastructure (parallel-safe)
+**Files:** `src/compiler/agents/types.ts`, `src/llm.ts`
+
+1. Create `src/compiler/agents/types.ts` with:
+   - `CompilationPlan` interface (project_context, phases[])
+   - `CompilationPhase` interface (id, agents[], dependsOn[])
+   - `AgentTask` interface (agent name, items[], context_hint?, max_tokens)
+   - `AgentResult` discriminated union (sections | commands | agents | rules | docs | skills)
+   - `TruncationError` class extending Error
+
+2. In `src/llm.ts`:
+   - After getting Anthropic response, check `response.stop_reason === 'max_tokens'`
+   - If truncated, throw `TruncationError` with agent name and tokens used
+   - Same for OpenAI: check `response.choices[0].finish_reason === 'length'`
+
+**Tests:** `src/compiler/agents/__tests__/types.test.ts` — type validation, TruncationError behavior  
+**Commit:** `feat(compiler): add multi-agent types and truncation detection`
+
+### Step 2: Batch Execution Engine (parallel-safe)
+**Files:** `src/compiler/batch.ts`
+
+1. Create `executePlan()` function:
+   - Takes `CompilationPlan`, `KairnConfig`, `concurrency: number`, `onProgress`
+   - Topologically sorts phases by `dependsOn`
+   - For each phase, runs agents with `runWithConcurrency` (import from evolve or reimplement)
+   - Merges `AgentResult[]` into a growing `HarnessIR` (using `createEmptyIR()`)
+   - Returns complete `HarnessIR`
+
+2. Create `runWithConcurrency<T>()` if not importable from evolve:
+   - Takes array of `() => Promise<T>`, concurrency limit
+   - Returns `T[]` preserving order
+
+**Tests:** `src/compiler/__tests__/batch.test.ts` — phase ordering, concurrency, error propagation, dependency validation  
+**Commit:** `feat(compiler): batch execution engine with concurrency control`
+
+### Step 3: @orchestrator Agent
+**Files:** `src/compiler/plan.ts`
+
+1. Create `generatePlan()` function:
+   - System prompt: "You are the Kairn compilation planner. Given a project skeleton and user intent, produce a CompilationPlan that determines what sections, commands, agents, rules, docs, and skills to generate, organized into dependency phases."
+   - Input: intent string, skeleton (from Pass 1)
+   - Output: `CompilationPlan` (parsed from LLM JSON response)
+   - Max tokens: 2048
+   - Include the list of standard sections (Purpose, Tech Stack, Commands, Architecture, Conventions, Key Commands, Output, Verification, Known Gotchas, Debugging, Git Workflow, Engineering Standards, Tool Usage Policy, Code Philosophy, First Turn Protocol, Sprint Contract, Completion Standards)
+   - Include the list of standard commands, agents based on autonomy level
+   - Let the orchestrator decide which are relevant and how to phase them
+
+2. Fallback: if LLM call fails, generate a default plan deterministically from skeleton fields
+
+**Tests:** `src/compiler/__tests__/plan.test.ts` — plan generation for simple/complex/research/content projects  
+**Commit:** `feat(compiler): @orchestrator compilation planner`
+
+### Step 4: Specialist Agents — Phase A (no dependencies)
+**Files:** `src/compiler/agents/sections-writer.ts`, `src/compiler/agents/rule-writer.ts`, `src/compiler/agents/doc-writer.ts`
+
+For each agent:
+1. Focused system prompt (500-1000 tokens) with format-specific conventions
+2. `generate*()` function taking intent, skeleton, plan context
+3. JSON output parsed into typed IR nodes
+4. Retry with higher max_tokens on `TruncationError`
+
+**@sections-writer:**
+- System prompt: CLAUDE.md template rules, section ordering, mandatory structure, line budgets
+- Input: project_context, tech_stack, autonomy_level, section list from plan
+- Output: `Section[]` (with id, heading, content, order)
+- Max tokens: 4096
+
+**@rule-writer:**
+- System prompt: path-scoped YAML frontmatter syntax, security baseline, constraint format
+- Input: project_context, tech_stack, rule list from plan
+- Output: `RuleNode[]` (with name, paths?, content)
+- Max tokens: 2048
+
+**@doc-writer:**
+- System prompt: template structures, acceptance criteria format
+- Input: project_context, doc list from plan
+- Output: `DocNode[]` (DECISIONS.md, LEARNINGS.md, SPRINT.md)
+- Max tokens: 2048
+
+**Tests:** `src/compiler/agents/__tests__/sections-writer.test.ts`, etc. — mock callLLM, verify output types  
+**Commit:** `feat(compiler): Phase A specialist agents (sections, rules, docs)`
 
-## Objective
+### Step 5: Specialist Agents — Phase B (depends on Phase A)
+**Files:** `src/compiler/agents/command-writer.ts`, `src/compiler/agents/agent-writer.ts`, `src/compiler/agents/skill-writer.ts`
+
+**@command-writer:**
+- System prompt: `!` shell integration, `$ARGUMENTS`, orchestration patterns, command format
+- Input: project_context, command list from plan, Section[] from Phase A (for context)
+- Output: `CommandNode[]` (with name, description, content)
+- Max tokens: 4096 (or batched if >10 commands)
+
+**@agent-writer:**
+- System prompt: YAML frontmatter conventions (`modelRouting`, `disallowedTools`), persona design, model tiering
+- Input: project_context, agent list from plan, RuleNode[] from Phase A (for scope)
+- Output: `AgentNode[]` (with name, model?, modelRouting?, content)
+- Max tokens: 4096 (or batched if >8 agents)
+
+**@skill-writer:**
+- System prompt: SKILL.md format, 3-phase TDD patterns
+- Input: project_context, skill list from plan
+- Output: `SkillNode[]`
+- Max tokens: 2048
+
+**Tests:** `src/compiler/agents/__tests__/command-writer.test.ts`, etc.  
+**Commit:** `feat(compiler): Phase B specialist agents (commands, agents, skills)`
 
-Implement the next feature milestone using the Ralph Loop with specialized subagents.
+### Step 6: @linker (Phase C)
+**Files:** `src/compiler/linker.ts`
 
-When you receive a version (e.g., "v2.0.0" or "v2.1.0"), execute this sequence:
-
-### Phase 0: Orient
-
-1. Read `ROADMAP.md` — find the target version, extract checklist items
-2. Read the matching design doc at `docs/design/v*.md`
-3. Verify git is clean: `git status`
-4. Create/checkout feature branch: `git checkout -b feature/$version` (or verify you're on the branch)
-
-### Phase 1: Plan
-
-Invoke `@architect`:
-
-> "Read ROADMAP.md for v$version and the design doc. Produce a `PLAN-v$version.md` with numbered steps. Each step: what to build, files to create, dependencies, verification command, commit message. Mark `[parallel-safe]` steps. Identify parallel groups: which steps can run simultaneously? Create a dependency graph."
-
-After @architect completes, commit:
-```bash
-git add PLAN-v$version.md
-git commit -m "plan: v$version implementation plan"
-```
-
-### Phase 2: Build
-
-Read the generated `PLAN-v$version.md`. Execute steps in order, respecting dependencies.
-
-**For parallel-safe steps (no dependencies):** Spawn multiple `@implementer` instances simultaneously using the @-mention syntax. Example:
-
-> "Use @implementer to execute steps 1, 3, and 5 from PLAN-v2.1.0.md in parallel. Each implementer should: read the assigned step, read the design doc, follow TDD (RED→GREEN→REFACTOR), build, verify, and commit when done."
-
-**For sequential steps:** Spawn one `@implementer` at a time.
-
-For each step (or parallel group):
-
-Invoke `@implementer`:
-
-> "Execute step N from `PLAN-v$version.md`. Read the plan, read the design doc at `docs/design/v*.md`. Follow TDD: write tests first (RED), implement minimum code (GREEN), refactor cleanly (REFACTOR). Run npm run build. Verify step's verification command. Commit when done."
-
-After each step:
-- Verify: `npm run build` passes
-- Verify: step's verification command passes  
-- Verify: commit exists in git log
-
-If a step fails: invoke `@debugger` with the error output.
-
-Continue until all steps complete.
-
-### Phase 3: Quality Gate
-
-Invoke `@reviewer`:
-
-> "Review the implementation of v$version. Check spec compliance: does every item in ROADMAP.md checklist have matching implementation? Check code quality: TS strict mode, error handling, patterns match src/commands/describe.ts and existing code. Output structured PASS/FAIL report with evidence. Be specific about what's missing or wrong."
-
-Read the review output.
-
-### Phase 4: Fix Loop (if needed)
-
-If reviewer reports BLOCKERS or SHOULD-FIX:
-
-Invoke `@debugger`:
-
-> "Fix these review findings: [paste findings]. Read the relevant code, understand the issue, implement the fix, then run npm run build and npm test. When everything passes, commit with a descriptive message."
-
-Then re-invoke `@reviewer` to re-check.
-
-Repeat max 3 times. If still failing, stop and report.
-
-### Phase 5: Finalize
-
-1. Verify:
-   ```bash
-   npm run build
-   node dist/cli.js --help
-   ```
-
-2. Final git log:
-   ```bash
-   git log --oneline -N
-   ```
-   (Show the last N commits from your feature branch)
-
-3. Report:
-   ```
-   ━━━ RALPH LOOP COMPLETE ━━━━━━━━━━━━━━━━━━━━
-   Version:    v$version
-   Commits:    [count] (show git log)
-   Review:     PASS
-   
-   Ready for: merge, ROADMAP/CHANGELOG update, version bump, PR/ship
-   ```
-
----
-
-## Subagent Reference
-
-| Agent | Tools | Role |
-|-------|-------|------|
-| `@architect` | Read, Glob, Grep | Reads design doc → produces PLAN with deps (Phase 1) |
-| `@implementer` | Read, Write, Edit, Bash, Glob, Grep | Executes ONE step using TDD (Phase 2, can parallelize) |
-| `@reviewer` | Read, Glob, Grep, Bash | Spec compliance + code quality check (Phase 3) |
-| `@debugger` | Read, Write, Edit, Bash, Grep, Glob | Fixes errors/review issues (Phase 2/4) |
-
----
-
-## Key Rules
-
-1. **Never skip Phase 3** (quality gate) — this is your safety check
-2. **Parallel @implementer only for steps marked `[parallel-safe]`** — honor dependencies
-3. **All commits use conventional format:** `feat:`, `fix:`, `test:`, `refactor:`, `docs:`
-4. **Do NOT bump version or update ROADMAP/CHANGELOG yet** — that's post-merge
-5. **Stop after Phase 5** — report completion to overseer (Hermes)
-6. **Rollback on stuck build:** If `npm run build` fails for >5 minutes, stop and call `@debugger`
-
----
-
-## For v2.2.2 Specifically
-
-The design doc is in `docs/design/v2.0-kairn-evolve.md` (section v2.2.1 — Proposer JSON Fix + Mutation Scope Expansion) — shows the exact failure + two-layer fix strategy.
-
-Bug report: Latest test run post-v2.2.1 showing proposer JSON failure.
-
-**THE #1 BLOCKER:** The proposer returns English prose instead of JSON. No mutations have EVER been applied across any test run. The loop "runs" but never "evolves." This must be fixed first.
-
-**Exactly what to fix:**
-1. **CRITICAL — Proposer JSON:** Add `jsonMode` to `callLLM()` with Anthropic assistant prefill (`{ role: "assistant", content: "{" }`) and OpenAI `response_format`. Also make `parseProposerResponse()` extract JSON from prose as fallback.
-
-This is a patch release — no new CLI commands. Just the JSON fix. Mutation scope expansion (delete mutations, MCP scope) will be v2.2.3.
-
-Builds on v2.2.1: modifies `callLLM()` in `src/llm.ts` and `parseProposerResponse()` in `src/evolve/proposer.ts`.
-
-PLAN-v2.2.1.md (v2.2.2 plan) has 4 steps grouped into 2 parallel groups (A: 2 parallel, B: 2 after A).
-
----
-
-## For v2.2.3 Specifically
-
-The design doc is in `docs/design/v2.0-kairn-evolve.md` (section v2.2.1 — Mutation Scope Expansion, Bug 3/4/5 details).
-
-**Depends on:** v2.2.2 landing first (the proposer JSON fix must work before expanding mutation actions).
-
-**Key fixes:**
-1. Add `delete_section` and `delete_file` mutation actions (types.ts, mutator.ts, proposer parser)
-2. Include `.mcp.json` in harness scope (baseline.ts, runner.ts, proposer reads it automatically)
-3. Rebalance proposer prompt — remove "Prefer ADDITIVE" bias, list all 5 actions, add MCP guidance
-
-This is a patch release — no new CLI commands. Mutation scope expansion.
-
-Builds on v2.2.2: modifies `Mutation` type, `applyMutations()`, `createBaseline()`, `createIsolatedWorkspace()`, `parseProposerResponse()`, `PROPOSER_SYSTEM_PROMPT`.
-
-PLAN-v2.2.3.md has 7 steps grouped into 2 parallel groups (A: 3 parallel, B: 4 after A).
-
----
-
-## For v2.3.0 Specifically
-
-The design doc is in `docs/design/v2.0-kairn-evolve.md` (section v2.3.0 — Advanced Scoring & Search).
-
-Feature ideas: `.omc/feature-ideas.md` (Quick Wins, Medium Features, Larger Features sections).
-
-**Key insight:** v2.3.0 is split into 3 tiers:
-1. **Quick Wins** (4 steps) — unblock downstream, improve DX: version fix, parallel eval, `evolve apply`, tool capture
-2. **Medium Features** (3 steps) — harness insights: utilization metrics, cost tracking, prompt caching
-3. **Core v2.3** (3 steps) — advanced scoring: multi-objective, search strategies, validation set
-
-Depends on v2.2.3: all evolution loop foundation must be solid first.
-
-**Parallel execution possible:**
-- Group A: All infrastructure fixes (version, cost, multi-obj, search, caching, validation) — 6 parallel
-- Group B: Iteration speed (parallel eval, apply) — after version fix
-- Group C: Harness insights (tool capture, utilization) — last
-
-Quick Wins alone cut iteration time from 20 min → 5 min, which unblocks faster development cycles.
-
-Builds on v2.2.3: modifies runner.ts, cli.ts, types.ts, scorers.ts, loop.ts, report.ts.
-
-PLAN-v2.3.0.md has 10 steps grouped into 3 parallel groups (A: 6 parallel, B: 3 after A, C: 1 after B).
+1. Cross-reference validation:
+   - Commands that mention `@agent-name` → verify agent exists
+   - Agents that reference `/project:command` → verify command exists
+   - Rules with path scopes → warn if no matching project structure
+   - Commands referencing docs/ files → verify doc exists
+
+2. Auto-fix simple issues:
+   - Remove `@` mentions for agents that don't exist
+   - Add missing `/project:help` command if absent
+   - Ensure `security.md` and `continuity.md` rules always present
+
+3. Return patched nodes (modified in place or as new copies)
+
+**Tests:** `src/compiler/__tests__/linker.test.ts` — broken refs detected, auto-fixes applied  
+**Commit:** `feat(compiler): @linker cross-reference validation`
+
+### Step 7: Compile Pipeline Refactor
+**Files:** `src/compiler/compile.ts`, `src/compiler/prompt.ts`
+
+1. Refactor `compile()`:
+   - Pass 1: unchanged (skeleton)
+   - Pass 2: call `generatePlan()` (new @orchestrator)
+   - Pass 3: call `executePlan()` (new batch engine → specialists → linker)
+   - Pass 4: deterministic assembly (settings, MCP config, intents — reuse existing code)
+   - Return `HarnessIR` wrapped in `EnvironmentSpec`
+
+2. Remove `HARNESS_PROMPT` from `prompt.ts` (replaced by per-agent prompts)
+   - Keep `SKELETON_PROMPT`, `SYSTEM_PROMPT`, `CLARIFICATION_PROMPT`
+   - Remove `buildHarnessMessage()`, `parseHarnessResponse()`
+
+3. Update `EnvironmentSpec.harness` type:
+   - Add `ir: HarnessIR` field
+   - Keep existing string fields for backward compat (populated from IR via renderer)
+   - Or: migrate to IR-only if adapters are updated in same PR
+
+**Tests:** Update `src/compiler/__tests__/compile.test.ts`  
+**Commit:** `feat(compiler): multi-agent compilation pipeline`
+
+### Step 8: Adapter Updates
+**Files:** `src/adapter/claude-code.ts`, `src/adapter/hermes-agent.ts`
+
+1. Update `writeEnvironment()` in claude-code adapter:
+   - Accept `HarnessIR` (or `EnvironmentSpec` containing it)
+   - Use `renderClaudeMd()`, `renderSettings()`, etc. from `src/ir/renderer.ts`
+   - Fall back to old string-based fields if `ir` is absent (backward compat)
+
+2. Same for hermes-agent adapter
+
+3. Update `src/commands/activate.ts` to handle both old and new EnvironmentSpec shapes
+
+**Tests:** Verify adapter output is identical for same input  
+**Commit:** `feat(adapter): consume HarnessIR via renderer`
+
+### Step 9: UX Updates
+**Files:** `src/ui.ts`, `src/commands/describe.ts`
+
+1. Update progress display for multi-agent phases:
+   - Show plan summary after Pass 2
+   - Show Phase A/B/C progress with agent names
+   - Show per-agent retry warnings
+   - Show total compilation time
+
+2. Update time estimate logic for multi-agent (parallel is faster)
+
+**Tests:** Snapshot tests for progress output  
+**Commit:** `feat(ui): multi-phase compilation progress display`
+
+### Step 10: Integration & Regression
+**Files:** Various test files
+
+1. End-to-end: `kairn describe` with mocked LLM → valid `.claude/` directory
+2. Round-trip: compile → render → parse → compare IR
+3. Evolve compatibility: compile → evolve → mutations work
+4. Backward compat: old EnvironmentSpec JSON files still load and activate
+5. Both adapters produce correct output
+
+**Commit:** `test(compiler): integration tests for multi-agent pipeline`
+
+### Step 11: Finalize
+1. `npm run build` — must succeed
+2. `npx vitest run` — all tests pass
+3. Update CHANGELOG.md
+4. `node dist/cli.js describe --help` — verify
+5. Manual smoke test: `kairn describe "Build a Python FastAPI with PostgreSQL"` (with real API key)
+6. `git log --oneline -15` — verify commit history
+
+**Commit:** `chore: bump to v2.11.0, update CHANGELOG`
+
+## Key Constraints
+
+- **TDD mandatory:** RED → GREEN → REFACTOR for every step
+- **Strict TypeScript:** no `any`, no `ts-ignore`, .js extensions on imports
+- **Max 3 fix rounds** in review phase
+- **Preserve all 936 existing tests** — none may break
+- **Cost-neutral:** total LLM tokens for compilation should be ≤2x current (prompt caching helps)
+
+## Success Criteria
+
+1. `kairn describe` never produces truncated JSON
+2. `compile()` returns `HarnessIR` (not flat strings)
+3. Generated harness quality ≥ current monolithic output
+4. All existing tests pass
+5. Both adapters produce identical file output
+6. `kairn evolve` works on environments compiled with new pipeline
