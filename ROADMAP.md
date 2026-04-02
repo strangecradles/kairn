@@ -339,14 +339,19 @@ Full plan: [`PLAN-v2.6.0.md`](PLAN-v2.6.0.md)
 - [x] Synthesis evaluated against full task suite — must beat best individual branch
 - [x] `kairn evolve apply --pbt` to deploy the winning harness
 
-### v2.7.0 — Structured Harness IR
+### v2.7.0 ✅ SHIPPED — Structured Harness IR ([design doc](docs/design/v2.7-harness-ir.md))
 > Raw Markdown mutation will corrupt formatting, accumulate contradictions, and break as files grow. A structured intermediate representation makes mutations composable, diffing meaningful, and format migration tractable.
 
-- [ ] Harness IR: typed data model for CLAUDE.md sections, commands, rules, agents, settings
-- [ ] Deterministic render: IR → .claude/ files (one-way, lossless)
-- [ ] Mutations operate on IR nodes, not raw text (type-safe, composable)
-- [ ] Diff engine compares IR trees, not string patches
-- [ ] Migration path: parse existing .claude/ → IR → re-render (format upgrade for free)
+Full plan: [`PLAN-v2.7.0.md`](PLAN-v2.7.0.md)
+
+- [x] **Harness IR type model** — typed data model for CLAUDE.md sections, commands, rules, agents, skills, docs, hooks, settings, MCP servers, intents
+- [x] **Parser** — `.claude/` directory → HarnessIR (CLAUDE.md section splitting, YAML frontmatter, settings.json, .mcp.json)
+- [x] **Renderer** — HarnessIR → `.claude/` files (deterministic, lossless, round-trip tested)
+- [x] **Round-trip test** — parse→render→parse preserves all content on real and synthetic harnesses
+- [x] **IR mutations** — 17 typed mutation operations (sections, commands, rules, agents, MCP, settings) with immutable application and pre-condition validation
+- [x] **Semantic diff engine** — compares IR trees by node ID/name, produces human-readable diffs with +/-/~/↕ markers
+- [x] **Legacy translation layer** — bridges text-based proposer Mutations to typed IRMutations with raw_text fallback
+- [x] **Evolution loop integration** — mutator uses IR pipeline internally (parse→translate→apply→render), copy-first/render-selectively preserves untouched files, IR-aware complexity measurement for KL regularization
 
 ### v2.8.0 — Polish & Integration
 - [ ] `kairn evolve watch` — live dashboard during evolution (progress, scores, current mutation)
