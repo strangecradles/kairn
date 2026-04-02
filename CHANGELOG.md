@@ -7,6 +7,30 @@ This project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [2.7.0] — 2026-04-02
+
+### Added
+- **Harness IR type model** (`src/ir/types.ts`) — typed intermediate representation for `.claude/` directories with 14 node types (Section, CommandNode, RuleNode, AgentNode, SkillNode, DocNode, HookNode, SettingsIR, McpServerNode, IntentNode), `IRMutation` discriminated union (17 mutation types), `IRDiff` structured diff, and factory functions
+- **Parser** (`src/ir/parser.ts`) — reads existing `.claude/` directories into HarnessIR; CLAUDE.md section splitting with heading-to-ID resolution, YAML frontmatter extraction for rules/agents, settings.json hook parsing, `.mcp.json` server decomposition
+- **Renderer** (`src/ir/renderer.ts`) — deterministic HarnessIR → file map conversion; CLAUDE.md rendering with section ordering, YAML frontmatter for rules and agents, settings.json merging, `.mcp.json` generation
+- **Round-trip integration test** (`src/ir/__tests__/roundtrip.test.ts`) — proves parse→render→parse preserves all content on real `.claude/` directory and synthetic harnesses with double round-trip idempotency
+- **IR mutation engine** (`src/ir/mutations.ts`) — 17 immutable mutation operations (update/add/remove/reorder sections, commands, rules, agents, MCP servers, settings) with `validateIRMutation` pre-condition checks
+- **Semantic diff engine** (`src/ir/diff.ts`) — structural comparison of two HarnessIR trees by node ID/name, with `formatIRDiff` producing human-readable output using +/-/~/↕ markers
+- **Legacy translation layer** (`src/ir/translate.ts`) — bridges text-based proposer `Mutation` objects to typed `IRMutation` values with raw_text fallback for unmappable operations
+- **`measureComplexityFromIR()`** in `regularization.ts` — IR-aware complexity measurement counting nodes directly from in-memory IR tree (no disk I/O)
+
+### Changed
+- **Evolution mutator** (`src/evolve/mutator.ts`) — `applyMutations()` now uses IR pipeline internally: parse → translate → apply IR mutations → render. Copy-first/render-selectively strategy preserves untouched files byte-for-byte. Falls back to legacy approach if IR parsing fails
+- **Evolution loop** (`src/evolve/loop.ts`) — baseline harness parsed to IR for complexity measurement; `measureComplexityFromIR` used when available with graceful fallback
+- **`generateDiff()`** — delegates to `diffIR` + `formatIRDiff` for harness directories, producing semantic diffs instead of character-level patches
+
+### Added (internal)
+- 7 new source files in `src/ir/` (~3,400 LOC)
+- 8 new test files with ~215 tests covering types, parser, renderer, round-trip, mutations, diff, translate, and IR integration
+- `resolveSectionId()` exported from parser for reuse by translation layer
+
+---
+
 ## [2.6.0] — 2026-04-01
 
 ### Added
