@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import type { KairnConfig } from '../../../types.js';
-import type { AgentTask, AgentWriterResult } from '../types.js';
+import type { KairnConfig, SkeletonSpec } from '../../../types.js';
+import type { AgentTask } from '../types.js';
 
 // ---------------------------------------------------------------------------
 // Mock callLLM
@@ -16,7 +16,7 @@ vi.mock('../../../llm.js', () => ({
 // Import after mocks
 // ---------------------------------------------------------------------------
 
-const { runAgentWriter } = await import('../agent-writer.js');
+const { generateAgents } = await import('../agent-writer.js');
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -33,11 +33,28 @@ function makeConfig(overrides: Partial<KairnConfig> = {}): KairnConfig {
   };
 }
 
+function makeSkeleton(overrides: Partial<SkeletonSpec> = {}): SkeletonSpec {
+  return {
+    name: 'test-project',
+    description: 'A test project',
+    tools: [],
+    outline: {
+      tech_stack: ['TypeScript', 'Node.js'],
+      workflow_type: 'development',
+      key_commands: ['build', 'test'],
+      custom_rules: [],
+      custom_agents: [],
+      custom_skills: [],
+    },
+    ...overrides,
+  };
+}
+
 function makeTask(overrides: Partial<AgentTask> = {}): AgentTask {
   return {
     agent: 'agent-writer',
     items: ['architect', 'reviewer'],
-    intent: 'Build a full-stack web app with React and Node',
+    max_tokens: 4096,
     ...overrides,
   };
 }
@@ -46,12 +63,12 @@ function makeTask(overrides: Partial<AgentTask> = {}): AgentTask {
 // Tests
 // ---------------------------------------------------------------------------
 
-describe('runAgentWriter', () => {
+describe('generateAgents', () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
-  it('returns an AgentWriterResult with agent field and agents array', async () => {
+  it('returns an AgentResult with agent field and agents array', async () => {
     callLLMMock.mockResolvedValueOnce(JSON.stringify([
       { name: 'architect', content: 'You are the project architect.' },
       { name: 'reviewer', content: 'You are the code reviewer.' },
@@ -59,11 +76,14 @@ describe('runAgentWriter', () => {
 
     const config = makeConfig();
     const task = makeTask();
-    const result = await runAgentWriter(config, task);
+    const result = await generateAgents('Build a full-stack web app with React and Node', makeSkeleton(), task, config);
 
     expect(result.agent).toBe('agent-writer');
-    expect(Array.isArray(result.agents)).toBe(true);
-    expect(result.agents).toHaveLength(2);
+    expect('agents' in result).toBe(true);
+    if (result.agent === 'agent-writer') {
+      expect(Array.isArray(result.agents)).toBe(true);
+      expect(result.agents).toHaveLength(2);
+    }
   });
 
   it('returns agents with required name and content fields', async () => {
@@ -73,10 +93,12 @@ describe('runAgentWriter', () => {
 
     const config = makeConfig();
     const task = makeTask({ items: ['architect'] });
-    const result = await runAgentWriter(config, task);
+    const result = await generateAgents('Build a full-stack web app', makeSkeleton(), task, config);
 
-    expect(result.agents[0].name).toBe('architect');
-    expect(result.agents[0].content).toBe('You are the project architect who designs systems.');
+    if (result.agent === 'agent-writer') {
+      expect(result.agents[0].name).toBe('architect');
+      expect(result.agents[0].content).toBe('You are the project architect who designs systems.');
+    }
   });
 
   it('returns agents with optional model field', async () => {
@@ -86,9 +108,11 @@ describe('runAgentWriter', () => {
 
     const config = makeConfig();
     const task = makeTask({ items: ['architect'] });
-    const result = await runAgentWriter(config, task);
+    const result = await generateAgents('Build a web app', makeSkeleton(), task, config);
 
-    expect(result.agents[0].model).toBe('opus');
+    if (result.agent === 'agent-writer') {
+      expect(result.agents[0].model).toBe('opus');
+    }
   });
 
   it('parses modelRouting object correctly from LLM response', async () => {
@@ -106,13 +130,15 @@ describe('runAgentWriter', () => {
 
     const config = makeConfig();
     const task = makeTask({ items: ['architect'] });
-    const result = await runAgentWriter(config, task);
+    const result = await generateAgents('Build a web app', makeSkeleton(), task, config);
 
-    expect(result.agents[0].modelRouting).toEqual({
-      default: 'sonnet',
-      escalateTo: 'opus',
-      escalateWhen: 'cross-cutting architectural changes',
-    });
+    if (result.agent === 'agent-writer') {
+      expect(result.agents[0].modelRouting).toEqual({
+        default: 'sonnet',
+        escalateTo: 'opus',
+        escalateWhen: 'cross-cutting architectural changes',
+      });
+    }
   });
 
   it('calls callLLM with cacheControl: true', async () => {
@@ -122,7 +148,7 @@ describe('runAgentWriter', () => {
 
     const config = makeConfig();
     const task = makeTask({ items: ['architect'] });
-    await runAgentWriter(config, task);
+    await generateAgents('Build a web app', makeSkeleton(), task, config);
 
     expect(callLLMMock).toHaveBeenCalledWith(
       config,
@@ -139,19 +165,23 @@ describe('runAgentWriter', () => {
 
     const config = makeConfig();
     const task = makeTask({ items: ['reviewer'] });
-    const result = await runAgentWriter(config, task);
+    const result = await generateAgents('Build something', makeSkeleton(), task, config);
 
-    expect(result.agents).toHaveLength(1);
-    expect(result.agents[0].name).toBe('reviewer');
+    if (result.agent === 'agent-writer') {
+      expect(result.agents).toHaveLength(1);
+      expect(result.agents[0].name).toBe('reviewer');
+    }
   });
 
   it('returns empty agents array without calling LLM when items is empty', async () => {
     const config = makeConfig();
     const task = makeTask({ items: [] });
-    const result = await runAgentWriter(config, task);
+    const result = await generateAgents('Build something', makeSkeleton(), task, config);
 
     expect(result.agent).toBe('agent-writer');
-    expect(result.agents).toEqual([]);
+    if (result.agent === 'agent-writer') {
+      expect(result.agents).toEqual([]);
+    }
     expect(callLLMMock).not.toHaveBeenCalled();
   });
 
@@ -173,12 +203,14 @@ describe('runAgentWriter', () => {
 
     const config = makeConfig();
     const task = makeTask({ items });
-    const result = await runAgentWriter(config, task);
+    const result = await generateAgents('Build a complex system', makeSkeleton(), task, config);
 
     expect(callLLMMock).toHaveBeenCalledTimes(3);
-    expect(result.agents).toHaveLength(14);
-    expect(result.agents[0].name).toBe('agent-0');
-    expect(result.agents[13].name).toBe('agent-13');
+    if (result.agent === 'agent-writer') {
+      expect(result.agents).toHaveLength(14);
+      expect(result.agents[0].name).toBe('agent-0');
+      expect(result.agents[13].name).toBe('agent-13');
+    }
   });
 
   it('does not batch when items.length <= 8', async () => {
@@ -190,13 +222,15 @@ describe('runAgentWriter', () => {
 
     const config = makeConfig();
     const task = makeTask({ items });
-    const result = await runAgentWriter(config, task);
+    const result = await generateAgents('Build something', makeSkeleton(), task, config);
 
     expect(callLLMMock).toHaveBeenCalledTimes(1);
-    expect(result.agents).toHaveLength(8);
+    if (result.agent === 'agent-writer') {
+      expect(result.agents).toHaveLength(8);
+    }
   });
 
-  it('includes phaseAContext in the user message when provided', async () => {
+  it('includes phaseAContext in the user message when provided via context_hint', async () => {
     callLLMMock.mockResolvedValueOnce(JSON.stringify([
       { name: 'architect', content: 'You are the architect.' },
     ]));
@@ -204,9 +238,9 @@ describe('runAgentWriter', () => {
     const config = makeConfig();
     const task = makeTask({
       items: ['architect'],
-      phaseAContext: 'Project uses React with TypeScript. Follow ESLint conventions.',
+      context_hint: 'Project uses React with TypeScript. Follow ESLint conventions.',
     });
-    await runAgentWriter(config, task);
+    await generateAgents('Build a web app', makeSkeleton(), task, config);
 
     const userMessage = callLLMMock.mock.calls[0][1] as string;
     expect(userMessage).toContain('React with TypeScript');
@@ -224,9 +258,11 @@ describe('runAgentWriter', () => {
 
     const config = makeConfig();
     const task = makeTask({ items: ['reviewer'] });
-    const result = await runAgentWriter(config, task);
+    const result = await generateAgents('Build something', makeSkeleton(), task, config);
 
-    expect(result.agents[0].disallowedTools).toEqual(['Bash', 'Write']);
+    if (result.agent === 'agent-writer') {
+      expect(result.agents[0].disallowedTools).toEqual(['Bash', 'Write']);
+    }
   });
 
   it('filters out agents with missing name or content', async () => {
@@ -239,10 +275,12 @@ describe('runAgentWriter', () => {
 
     const config = makeConfig();
     const task = makeTask({ items: ['valid', 'invalid1', 'invalid2', 'invalid3'] });
-    const result = await runAgentWriter(config, task);
+    const result = await generateAgents('Build something', makeSkeleton(), task, config);
 
-    expect(result.agents).toHaveLength(1);
-    expect(result.agents[0].name).toBe('valid');
+    if (result.agent === 'agent-writer') {
+      expect(result.agents).toHaveLength(1);
+      expect(result.agents[0].name).toBe('valid');
+    }
   });
 
   it('passes intent in the user message', async () => {
@@ -251,8 +289,8 @@ describe('runAgentWriter', () => {
     ]));
 
     const config = makeConfig();
-    const task = makeTask({ intent: 'Build a CLI tool for data processing' });
-    await runAgentWriter(config, task);
+    const task = makeTask();
+    await generateAgents('Build a CLI tool for data processing', makeSkeleton(), task, config);
 
     const userMessage = callLLMMock.mock.calls[0][1] as string;
     expect(userMessage).toContain('Build a CLI tool for data processing');

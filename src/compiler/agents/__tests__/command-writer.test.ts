@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import type { AgentTask, CommandWriterResult } from "../types.js";
+import type { AgentTask } from "../types.js";
 import type { CommandNode } from "../../../ir/types.js";
+import type { KairnConfig, SkeletonSpec } from "../../../types.js";
 
 // ─── Mock callLLM ──────────────────────────────────────────────────────────
 
@@ -14,11 +15,22 @@ vi.mock("../../../llm.js", () => ({
 
 // ─── Test helpers ──────────────────────────────────────────────────────────
 
-function makeTask(overrides: Partial<AgentTask> = {}): AgentTask {
+function makeConfig(overrides: Partial<KairnConfig> = {}): KairnConfig {
   return {
-    agent: "command-writer",
-    items: ["build", "test", "lint"],
-    intent: "TypeScript CLI project with standard dev workflow",
+    provider: "anthropic" as const,
+    api_key: "test-key",
+    model: "claude-sonnet-4-6",
+    default_runtime: "claude-code",
+    created_at: "2026-01-01",
+    ...overrides,
+  };
+}
+
+function makeSkeleton(overrides: Partial<SkeletonSpec> = {}): SkeletonSpec {
+  return {
+    name: "test-project",
+    description: "A test project",
+    tools: [],
     outline: {
       tech_stack: ["TypeScript", "Node.js"],
       workflow_type: "cli-development",
@@ -27,6 +39,15 @@ function makeTask(overrides: Partial<AgentTask> = {}): AgentTask {
       custom_agents: [],
       custom_skills: [],
     },
+    ...overrides,
+  };
+}
+
+function makeTask(overrides: Partial<AgentTask> = {}): AgentTask {
+  return {
+    agent: "command-writer",
+    items: ["build", "test", "lint"],
+    max_tokens: 4096,
     ...overrides,
   };
 }
@@ -41,13 +62,13 @@ function makeFencedResponse(commands: Array<{ name: string; description: string;
 
 // ─── Tests ─────────────────────────────────────────────────────────────────
 
-describe("runCommandWriter", () => {
+describe("generateCommands", () => {
   beforeEach(() => {
     mockCallLLM.mockReset();
   });
 
   it("returns an AgentResult with agent: 'command-writer' and commands array", async () => {
-    const { runCommandWriter } = await import("../command-writer.js");
+    const { generateCommands } = await import("../command-writer.js");
 
     mockCallLLM.mockResolvedValueOnce(
       makeLLMResponse([
@@ -58,17 +79,19 @@ describe("runCommandWriter", () => {
     );
 
     const task = makeTask();
-    const config = { provider: "anthropic" as const, api_key: "test-key", model: "claude-sonnet-4-6", default_runtime: "claude-code", created_at: "2026-01-01" };
+    const config = makeConfig();
 
-    const result = await runCommandWriter(task, config);
+    const result = await generateCommands("TypeScript CLI project with standard dev workflow", makeSkeleton(), task, config);
 
     expect(result.agent).toBe("command-writer");
-    expect(result.commands).toBeDefined();
-    expect(Array.isArray(result.commands)).toBe(true);
+    if (result.agent === "command-writer") {
+      expect(result.commands).toBeDefined();
+      expect(Array.isArray(result.commands)).toBe(true);
+    }
   });
 
   it("returns CommandNode[] with name, description, and content fields", async () => {
-    const { runCommandWriter } = await import("../command-writer.js");
+    const { generateCommands } = await import("../command-writer.js");
 
     mockCallLLM.mockResolvedValueOnce(
       makeLLMResponse([
@@ -78,22 +101,24 @@ describe("runCommandWriter", () => {
     );
 
     const task = makeTask({ items: ["build"] });
-    const config = { provider: "anthropic" as const, api_key: "test-key", model: "claude-sonnet-4-6", default_runtime: "claude-code", created_at: "2026-01-01" };
+    const config = makeConfig();
 
-    const result = await runCommandWriter(task, config);
+    const result = await generateCommands("TypeScript CLI project", makeSkeleton(), task, config);
 
-    for (const cmd of result.commands) {
-      expect(cmd).toHaveProperty("name");
-      expect(cmd).toHaveProperty("description");
-      expect(cmd).toHaveProperty("content");
-      expect(typeof cmd.name).toBe("string");
-      expect(typeof cmd.description).toBe("string");
-      expect(typeof cmd.content).toBe("string");
+    if (result.agent === "command-writer") {
+      for (const cmd of result.commands) {
+        expect(cmd).toHaveProperty("name");
+        expect(cmd).toHaveProperty("description");
+        expect(cmd).toHaveProperty("content");
+        expect(typeof cmd.name).toBe("string");
+        expect(typeof cmd.description).toBe("string");
+        expect(typeof cmd.content).toBe("string");
+      }
     }
   });
 
   it("always includes a help command even if LLM omits it", async () => {
-    const { runCommandWriter } = await import("../command-writer.js");
+    const { generateCommands } = await import("../command-writer.js");
 
     mockCallLLM.mockResolvedValueOnce(
       makeLLMResponse([
@@ -103,17 +128,19 @@ describe("runCommandWriter", () => {
     );
 
     const task = makeTask({ items: ["build", "test"] });
-    const config = { provider: "anthropic" as const, api_key: "test-key", model: "claude-sonnet-4-6", default_runtime: "claude-code", created_at: "2026-01-01" };
+    const config = makeConfig();
 
-    const result = await runCommandWriter(task, config);
+    const result = await generateCommands("TypeScript CLI project", makeSkeleton(), task, config);
 
-    const helpCmd = result.commands.find((c) => c.name === "help");
-    expect(helpCmd).toBeDefined();
-    expect(helpCmd!.content).toContain("slash commands");
+    if (result.agent === "command-writer") {
+      const helpCmd = result.commands.find((c: CommandNode) => c.name === "help");
+      expect(helpCmd).toBeDefined();
+      expect(helpCmd!.content).toContain("slash commands");
+    }
   });
 
   it("does not duplicate help if LLM already includes it", async () => {
-    const { runCommandWriter } = await import("../command-writer.js");
+    const { generateCommands } = await import("../command-writer.js");
 
     mockCallLLM.mockResolvedValueOnce(
       makeLLMResponse([
@@ -123,18 +150,20 @@ describe("runCommandWriter", () => {
     );
 
     const task = makeTask({ items: ["build"] });
-    const config = { provider: "anthropic" as const, api_key: "test-key", model: "claude-sonnet-4-6", default_runtime: "claude-code", created_at: "2026-01-01" };
+    const config = makeConfig();
 
-    const result = await runCommandWriter(task, config);
+    const result = await generateCommands("TypeScript CLI project", makeSkeleton(), task, config);
 
-    const helpCommands = result.commands.filter((c) => c.name === "help");
-    expect(helpCommands).toHaveLength(1);
-    // Should keep the LLM's version, not inject default
-    expect(helpCommands[0].content).toBe("Custom help content");
+    if (result.agent === "command-writer") {
+      const helpCommands = result.commands.filter((c: CommandNode) => c.name === "help");
+      expect(helpCommands).toHaveLength(1);
+      // Should keep the LLM's version, not inject default
+      expect(helpCommands[0].content).toBe("Custom help content");
+    }
   });
 
   it("calls callLLM with cacheControl: true", async () => {
-    const { runCommandWriter } = await import("../command-writer.js");
+    const { generateCommands } = await import("../command-writer.js");
 
     mockCallLLM.mockResolvedValueOnce(
       makeLLMResponse([
@@ -144,9 +173,9 @@ describe("runCommandWriter", () => {
     );
 
     const task = makeTask({ items: ["build"] });
-    const config = { provider: "anthropic" as const, api_key: "test-key", model: "claude-sonnet-4-6", default_runtime: "claude-code", created_at: "2026-01-01" };
+    const config = makeConfig();
 
-    await runCommandWriter(task, config);
+    await generateCommands("TypeScript CLI project", makeSkeleton(), task, config);
 
     expect(mockCallLLM).toHaveBeenCalledTimes(1);
     const callOptions = mockCallLLM.mock.calls[0][2] as Record<string, unknown>;
@@ -154,7 +183,7 @@ describe("runCommandWriter", () => {
   });
 
   it("parses JSON responses wrapped in code fences", async () => {
-    const { runCommandWriter } = await import("../command-writer.js");
+    const { generateCommands } = await import("../command-writer.js");
 
     mockCallLLM.mockResolvedValueOnce(
       makeFencedResponse([
@@ -163,28 +192,32 @@ describe("runCommandWriter", () => {
     );
 
     const task = makeTask({ items: ["deploy"] });
-    const config = { provider: "anthropic" as const, api_key: "test-key", model: "claude-sonnet-4-6", default_runtime: "claude-code", created_at: "2026-01-01" };
+    const config = makeConfig();
 
-    const result = await runCommandWriter(task, config);
+    const result = await generateCommands("TypeScript CLI project", makeSkeleton(), task, config);
 
-    expect(result.commands.find((c) => c.name === "deploy")).toBeDefined();
+    if (result.agent === "command-writer") {
+      expect(result.commands.find((c: CommandNode) => c.name === "deploy")).toBeDefined();
+    }
   });
 
   it("returns empty commands array without calling LLM when items is empty", async () => {
-    const { runCommandWriter } = await import("../command-writer.js");
+    const { generateCommands } = await import("../command-writer.js");
 
     const task = makeTask({ items: [] });
-    const config = { provider: "anthropic" as const, api_key: "test-key", model: "claude-sonnet-4-6", default_runtime: "claude-code", created_at: "2026-01-01" };
+    const config = makeConfig();
 
-    const result = await runCommandWriter(task, config);
+    const result = await generateCommands("TypeScript CLI project", makeSkeleton(), task, config);
 
     expect(result.agent).toBe("command-writer");
-    expect(result.commands).toEqual([]);
+    if (result.agent === "command-writer") {
+      expect(result.commands).toEqual([]);
+    }
     expect(mockCallLLM).not.toHaveBeenCalled();
   });
 
   it("batches items when there are more than 10, making multiple LLM calls", async () => {
-    const { runCommandWriter } = await import("../command-writer.js");
+    const { generateCommands } = await import("../command-writer.js");
 
     const items = Array.from({ length: 18 }, (_, i) => `cmd-${i}`);
 
@@ -222,17 +255,19 @@ describe("runCommandWriter", () => {
     );
 
     const task = makeTask({ items });
-    const config = { provider: "anthropic" as const, api_key: "test-key", model: "claude-sonnet-4-6", default_runtime: "claude-code", created_at: "2026-01-01" };
+    const config = makeConfig();
 
-    const result = await runCommandWriter(task, config);
+    const result = await generateCommands("TypeScript CLI project", makeSkeleton(), task, config);
 
     expect(mockCallLLM).toHaveBeenCalledTimes(3);
-    // 18 commands from LLM + 1 injected help = 19
-    expect(result.commands.length).toBe(19);
+    if (result.agent === "command-writer") {
+      // 18 commands from LLM + 1 injected help = 19
+      expect(result.commands.length).toBe(19);
+    }
   });
 
   it("does not batch when items count is 10 or fewer", async () => {
-    const { runCommandWriter } = await import("../command-writer.js");
+    const { generateCommands } = await import("../command-writer.js");
 
     const items = Array.from({ length: 10 }, (_, i) => `cmd-${i}`);
 
@@ -247,17 +282,19 @@ describe("runCommandWriter", () => {
     );
 
     const task = makeTask({ items });
-    const config = { provider: "anthropic" as const, api_key: "test-key", model: "claude-sonnet-4-6", default_runtime: "claude-code", created_at: "2026-01-01" };
+    const config = makeConfig();
 
-    const result = await runCommandWriter(task, config);
+    const result = await generateCommands("TypeScript CLI project", makeSkeleton(), task, config);
 
     expect(mockCallLLM).toHaveBeenCalledTimes(1);
-    // 10 from LLM + 1 help = 11
-    expect(result.commands.length).toBe(11);
+    if (result.agent === "command-writer") {
+      // 10 from LLM + 1 help = 11
+      expect(result.commands.length).toBe(11);
+    }
   });
 
-  it("includes phaseAContext in the user message when provided", async () => {
-    const { runCommandWriter } = await import("../command-writer.js");
+  it("includes intent and tech stack in the user message", async () => {
+    const { generateCommands } = await import("../command-writer.js");
 
     mockCallLLM.mockResolvedValueOnce(
       makeLLMResponse([
@@ -267,17 +304,19 @@ describe("runCommandWriter", () => {
     );
 
     const task = makeTask({ items: ["build"] });
-    const config = { provider: "anthropic" as const, api_key: "test-key", model: "claude-sonnet-4-6", default_runtime: "claude-code", created_at: "2026-01-01" };
+    const config = makeConfig();
+    const skeleton = makeSkeleton();
 
-    await runCommandWriter(task, config, "## Architecture\nMicroservices pattern");
+    await generateCommands("TypeScript microservices project", skeleton, task, config);
 
     const userMessage = mockCallLLM.mock.calls[0][1] as string;
-    expect(userMessage).toContain("## Architecture");
-    expect(userMessage).toContain("Microservices pattern");
+    expect(userMessage).toContain("TypeScript microservices project");
+    expect(userMessage).toContain("TypeScript");
+    expect(userMessage).toContain("Node.js");
   });
 
   it("constructs commands using createCommandNode factory", async () => {
-    const { runCommandWriter } = await import("../command-writer.js");
+    const { generateCommands } = await import("../command-writer.js");
 
     mockCallLLM.mockResolvedValueOnce(
       makeLLMResponse([
@@ -286,20 +325,22 @@ describe("runCommandWriter", () => {
     );
 
     const task = makeTask({ items: ["deploy"] });
-    const config = { provider: "anthropic" as const, api_key: "test-key", model: "claude-sonnet-4-6", default_runtime: "claude-code", created_at: "2026-01-01" };
+    const config = makeConfig();
 
-    const result = await runCommandWriter(task, config);
+    const result = await generateCommands("TypeScript CLI project", makeSkeleton(), task, config);
 
-    const deploy = result.commands.find((c) => c.name === "deploy");
-    expect(deploy).toEqual({
-      name: "deploy",
-      description: "Deploy to production",
-      content: "Deploy the app\n\n!npm run deploy",
-    });
+    if (result.agent === "command-writer") {
+      const deploy = result.commands.find((c: CommandNode) => c.name === "deploy");
+      expect(deploy).toEqual({
+        name: "deploy",
+        description: "Deploy to production",
+        content: "Deploy the app\n\n!npm run deploy",
+      });
+    }
   });
 
   it("merges batched results and deduplicates by name", async () => {
-    const { runCommandWriter } = await import("../command-writer.js");
+    const { generateCommands } = await import("../command-writer.js");
 
     const items = Array.from({ length: 12 }, (_, i) => `cmd-${i}`);
 
@@ -326,13 +367,15 @@ describe("runCommandWriter", () => {
     );
 
     const task = makeTask({ items });
-    const config = { provider: "anthropic" as const, api_key: "test-key", model: "claude-sonnet-4-6", default_runtime: "claude-code", created_at: "2026-01-01" };
+    const config = makeConfig();
 
-    const result = await runCommandWriter(task, config);
+    const result = await generateCommands("TypeScript CLI project", makeSkeleton(), task, config);
 
-    // Should have 12 unique commands from LLM + 1 help = 13
-    const names = result.commands.map((c) => c.name);
-    const uniqueNames = new Set(names);
-    expect(names.length).toBe(uniqueNames.size);
+    if (result.agent === "command-writer") {
+      // Should have 12 unique commands from LLM + 1 help = 13
+      const names = result.commands.map((c: CommandNode) => c.name);
+      const uniqueNames = new Set(names);
+      expect(names.length).toBe(uniqueNames.size);
+    }
   });
 });

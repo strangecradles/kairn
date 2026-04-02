@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import type { KairnConfig } from '../../../types.js';
+import type { KairnConfig, SkeletonSpec } from '../../../types.js';
 import type { AgentTask } from '../types.js';
 import type { DocNode } from '../../../ir/types.js';
 
@@ -26,24 +26,41 @@ function makeConfig(overrides: Partial<KairnConfig> = {}): KairnConfig {
   };
 }
 
-function makeTask(overrides: Partial<AgentTask> = {}): AgentTask {
+function makeSkeleton(overrides: Partial<SkeletonSpec> = {}): SkeletonSpec {
   return {
-    agent: 'doc-writer',
-    intent: 'Build a REST API for managing tasks',
-    items: ['DECISIONS', 'LEARNINGS', 'SPRINT'],
+    name: 'test-project',
+    description: 'A test project',
+    tools: [],
+    outline: {
+      tech_stack: ['TypeScript', 'Node.js'],
+      workflow_type: 'api-development',
+      key_commands: ['build', 'test'],
+      custom_rules: [],
+      custom_agents: [],
+      custom_skills: [],
+    },
     ...overrides,
   };
 }
 
-// ─── runDocWriter ──────────────────────────────────────────────────────────
+function makeTask(overrides: Partial<AgentTask> = {}): AgentTask {
+  return {
+    agent: 'doc-writer',
+    items: ['DECISIONS', 'LEARNINGS', 'SPRINT'],
+    max_tokens: 4096,
+    ...overrides,
+  };
+}
 
-describe('runDocWriter', () => {
+// ─── generateDocs ──────────────────────────────────────────────────────────
+
+describe('generateDocs', () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
   it('returns { agent: "doc-writer", docs: DocNode[] }', async () => {
-    const { runDocWriter } = await import('../doc-writer.js');
+    const { generateDocs } = await import('../doc-writer.js');
 
     const llmDocs: Array<{ name: string; content: string }> = [
       { name: 'DECISIONS', content: '# Decisions\n\n| Date | Decision | Rationale |\n|------|----------|-----------|' },
@@ -52,21 +69,23 @@ describe('runDocWriter', () => {
     ];
     mockedCallLLM.mockResolvedValue(JSON.stringify(llmDocs));
 
-    const result = await runDocWriter(makeTask(), makeConfig());
+    const result = await generateDocs('Build a REST API for managing tasks', makeSkeleton(), makeTask(), makeConfig());
 
     expect(result.agent).toBe('doc-writer');
-    expect(Array.isArray(result.docs)).toBe(true);
-    expect(result.docs.length).toBeGreaterThanOrEqual(3);
-    for (const doc of result.docs) {
-      expect(doc).toHaveProperty('name');
-      expect(doc).toHaveProperty('content');
-      expect(typeof doc.name).toBe('string');
-      expect(typeof doc.content).toBe('string');
+    if (result.agent === 'doc-writer') {
+      expect(Array.isArray(result.docs)).toBe(true);
+      expect(result.docs.length).toBeGreaterThanOrEqual(3);
+      for (const doc of result.docs) {
+        expect(doc).toHaveProperty('name');
+        expect(doc).toHaveProperty('content');
+        expect(typeof doc.name).toBe('string');
+        expect(typeof doc.content).toBe('string');
+      }
     }
   });
 
   it('always includes DECISIONS, LEARNINGS, SPRINT docs even when LLM omits them', async () => {
-    const { runDocWriter } = await import('../doc-writer.js');
+    const { generateDocs } = await import('../doc-writer.js');
 
     // LLM returns only one doc, missing the required three
     const llmDocs: Array<{ name: string; content: string }> = [
@@ -74,59 +93,67 @@ describe('runDocWriter', () => {
     ];
     mockedCallLLM.mockResolvedValue(JSON.stringify(llmDocs));
 
-    const result = await runDocWriter(makeTask(), makeConfig());
+    const result = await generateDocs('Build a REST API for managing tasks', makeSkeleton(), makeTask(), makeConfig());
 
-    const names = result.docs.map((d: DocNode) => d.name);
-    expect(names).toContain('DECISIONS');
-    expect(names).toContain('LEARNINGS');
-    expect(names).toContain('SPRINT');
-    // The LLM-provided doc should also be present
-    expect(names).toContain('ARCHITECTURE');
+    if (result.agent === 'doc-writer') {
+      const names = result.docs.map((d: DocNode) => d.name);
+      expect(names).toContain('DECISIONS');
+      expect(names).toContain('LEARNINGS');
+      expect(names).toContain('SPRINT');
+      // The LLM-provided doc should also be present
+      expect(names).toContain('ARCHITECTURE');
+    }
   });
 
   it('injects default DECISIONS template when LLM omits it', async () => {
-    const { runDocWriter } = await import('../doc-writer.js');
+    const { generateDocs } = await import('../doc-writer.js');
 
     mockedCallLLM.mockResolvedValue(JSON.stringify([]));
 
-    const result = await runDocWriter(makeTask(), makeConfig());
+    const result = await generateDocs('Build a REST API', makeSkeleton(), makeTask(), makeConfig());
 
-    const decisions = result.docs.find((d: DocNode) => d.name === 'DECISIONS');
-    expect(decisions).toBeDefined();
-    expect(decisions!.content).toContain('# Decisions');
-    expect(decisions!.content).toContain('| Date | Decision | Rationale |');
+    if (result.agent === 'doc-writer') {
+      const decisions = result.docs.find((d: DocNode) => d.name === 'DECISIONS');
+      expect(decisions).toBeDefined();
+      expect(decisions!.content).toContain('# Decisions');
+      expect(decisions!.content).toContain('| Date | Decision | Rationale |');
+    }
   });
 
   it('injects default LEARNINGS template when LLM omits it', async () => {
-    const { runDocWriter } = await import('../doc-writer.js');
+    const { generateDocs } = await import('../doc-writer.js');
 
     mockedCallLLM.mockResolvedValue(JSON.stringify([]));
 
-    const result = await runDocWriter(makeTask(), makeConfig());
+    const result = await generateDocs('Build a REST API', makeSkeleton(), makeTask(), makeConfig());
 
-    const learnings = result.docs.find((d: DocNode) => d.name === 'LEARNINGS');
-    expect(learnings).toBeDefined();
-    expect(learnings!.content).toContain('# Learnings');
-    expect(learnings!.content).toContain('| Date | Learning | Impact |');
+    if (result.agent === 'doc-writer') {
+      const learnings = result.docs.find((d: DocNode) => d.name === 'LEARNINGS');
+      expect(learnings).toBeDefined();
+      expect(learnings!.content).toContain('# Learnings');
+      expect(learnings!.content).toContain('| Date | Learning | Impact |');
+    }
   });
 
   it('injects default SPRINT template with acceptance criteria structure', async () => {
-    const { runDocWriter } = await import('../doc-writer.js');
+    const { generateDocs } = await import('../doc-writer.js');
 
     mockedCallLLM.mockResolvedValue(JSON.stringify([]));
 
-    const result = await runDocWriter(makeTask(), makeConfig());
+    const result = await generateDocs('Build a REST API', makeSkeleton(), makeTask(), makeConfig());
 
-    const sprint = result.docs.find((d: DocNode) => d.name === 'SPRINT');
-    expect(sprint).toBeDefined();
-    expect(sprint!.content).toContain('# Sprint');
-    expect(sprint!.content).toContain('## Acceptance Criteria');
-    expect(sprint!.content).toContain('- [ ]');
-    expect(sprint!.content).toContain('## Status');
+    if (result.agent === 'doc-writer') {
+      const sprint = result.docs.find((d: DocNode) => d.name === 'SPRINT');
+      expect(sprint).toBeDefined();
+      expect(sprint!.content).toContain('# Sprint');
+      expect(sprint!.content).toContain('## Acceptance Criteria');
+      expect(sprint!.content).toContain('- [ ]');
+      expect(sprint!.content).toContain('## Status');
+    }
   });
 
   it('does not duplicate required docs when LLM provides them', async () => {
-    const { runDocWriter } = await import('../doc-writer.js');
+    const { generateDocs } = await import('../doc-writer.js');
 
     const customDecisions = '# Decisions\n\nCustom decisions content for this project.';
     const llmDocs = [
@@ -136,22 +163,24 @@ describe('runDocWriter', () => {
     ];
     mockedCallLLM.mockResolvedValue(JSON.stringify(llmDocs));
 
-    const result = await runDocWriter(makeTask(), makeConfig());
+    const result = await generateDocs('Build a REST API', makeSkeleton(), makeTask(), makeConfig());
 
-    const decisionsCount = result.docs.filter((d: DocNode) => d.name === 'DECISIONS').length;
-    expect(decisionsCount).toBe(1);
-    // LLM-provided content should be preserved, not overwritten
-    const decisions = result.docs.find((d: DocNode) => d.name === 'DECISIONS');
-    expect(decisions!.content).toBe(customDecisions);
+    if (result.agent === 'doc-writer') {
+      const decisionsCount = result.docs.filter((d: DocNode) => d.name === 'DECISIONS').length;
+      expect(decisionsCount).toBe(1);
+      // LLM-provided content should be preserved, not overwritten
+      const decisions = result.docs.find((d: DocNode) => d.name === 'DECISIONS');
+      expect(decisions!.content).toBe(customDecisions);
+    }
   });
 
   it('calls callLLM with cacheControl: true', async () => {
-    const { runDocWriter } = await import('../doc-writer.js');
+    const { generateDocs } = await import('../doc-writer.js');
 
     mockedCallLLM.mockResolvedValue(JSON.stringify([]));
 
     const config = makeConfig();
-    await runDocWriter(makeTask(), config);
+    await generateDocs('Build a REST API', makeSkeleton(), makeTask(), config);
 
     expect(mockedCallLLM).toHaveBeenCalledTimes(1);
     const callOptions = mockedCallLLM.mock.calls[0][2];
@@ -159,11 +188,11 @@ describe('runDocWriter', () => {
   });
 
   it('includes doc-writer identity in the system prompt', async () => {
-    const { runDocWriter } = await import('../doc-writer.js');
+    const { generateDocs } = await import('../doc-writer.js');
 
     mockedCallLLM.mockResolvedValue(JSON.stringify([]));
 
-    await runDocWriter(makeTask(), makeConfig());
+    await generateDocs('Build a REST API', makeSkeleton(), makeTask(), makeConfig());
 
     expect(mockedCallLLM).toHaveBeenCalledTimes(1);
     const callOptions = mockedCallLLM.mock.calls[0][2];
@@ -172,7 +201,7 @@ describe('runDocWriter', () => {
   });
 
   it('parses JSON with code fence stripping', async () => {
-    const { runDocWriter } = await import('../doc-writer.js');
+    const { generateDocs } = await import('../doc-writer.js');
 
     const llmDocs = [
       { name: 'DECISIONS', content: '# Decisions\n\n| Date | Decision | Rationale |\n|------|----------|-----------|' },
@@ -183,32 +212,35 @@ describe('runDocWriter', () => {
     const fencedResponse = '```json\n' + JSON.stringify(llmDocs) + '\n```';
     mockedCallLLM.mockResolvedValue(fencedResponse);
 
-    const result = await runDocWriter(makeTask(), makeConfig());
+    const result = await generateDocs('Build a REST API', makeSkeleton(), makeTask(), makeConfig());
 
     expect(result.agent).toBe('doc-writer');
-    expect(result.docs.length).toBeGreaterThanOrEqual(3);
-    const decisions = result.docs.find((d: DocNode) => d.name === 'DECISIONS');
-    expect(decisions).toBeDefined();
+    if (result.agent === 'doc-writer') {
+      expect(result.docs.length).toBeGreaterThanOrEqual(3);
+      const decisions = result.docs.find((d: DocNode) => d.name === 'DECISIONS');
+      expect(decisions).toBeDefined();
+    }
   });
 
   it('returns empty docs without calling LLM when task.items is empty', async () => {
-    const { runDocWriter } = await import('../doc-writer.js');
+    const { generateDocs } = await import('../doc-writer.js');
 
     const emptyTask = makeTask({ items: [] });
-    const result = await runDocWriter(emptyTask, makeConfig());
+    const result = await generateDocs('Build a REST API', makeSkeleton(), emptyTask, makeConfig());
 
     expect(result.agent).toBe('doc-writer');
-    expect(result.docs).toEqual([]);
+    if (result.agent === 'doc-writer') {
+      expect(result.docs).toEqual([]);
+    }
     expect(mockedCallLLM).not.toHaveBeenCalled();
   });
 
   it('includes the intent in the user message to the LLM', async () => {
-    const { runDocWriter } = await import('../doc-writer.js');
+    const { generateDocs } = await import('../doc-writer.js');
 
     mockedCallLLM.mockResolvedValue(JSON.stringify([]));
 
-    const task = makeTask({ intent: 'Build a GraphQL API for e-commerce' });
-    await runDocWriter(task, makeConfig());
+    await generateDocs('Build a GraphQL API for e-commerce', makeSkeleton(), makeTask(), makeConfig());
 
     expect(mockedCallLLM).toHaveBeenCalledTimes(1);
     const userMessage = mockedCallLLM.mock.calls[0][1];
@@ -216,12 +248,12 @@ describe('runDocWriter', () => {
   });
 
   it('includes the item names in the user message to the LLM', async () => {
-    const { runDocWriter } = await import('../doc-writer.js');
+    const { generateDocs } = await import('../doc-writer.js');
 
     mockedCallLLM.mockResolvedValue(JSON.stringify([]));
 
     const task = makeTask({ items: ['DECISIONS', 'LEARNINGS', 'SPRINT', 'ARCHITECTURE'] });
-    await runDocWriter(task, makeConfig());
+    await generateDocs('Build a REST API', makeSkeleton(), task, makeConfig());
 
     expect(mockedCallLLM).toHaveBeenCalledTimes(1);
     const userMessage = mockedCallLLM.mock.calls[0][1];

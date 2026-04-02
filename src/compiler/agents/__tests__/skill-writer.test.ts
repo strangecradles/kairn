@@ -1,26 +1,19 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import type { KairnConfig } from "../../../types.js";
-import type { SkillWriterTask, SkillWriterResult } from "../types.js";
+import type { KairnConfig, SkeletonSpec } from "../../../types.js";
+import type { AgentTask } from "../types.js";
 
 // ---------------------------------------------------------------------------
 // Mock callLLM before importing the module under test
 // ---------------------------------------------------------------------------
 
-const callLLMMock = vi.fn<
-  [KairnConfig, string, { maxTokens?: number; systemPrompt: string; jsonMode?: boolean; cacheControl?: boolean }],
-  Promise<string>
->();
+const callLLMMock = vi.fn<(...args: unknown[]) => Promise<string>>();
 
 vi.mock("../../../llm.js", () => ({
-  callLLM: (...args: unknown[]) => callLLMMock(
-    args[0] as KairnConfig,
-    args[1] as string,
-    args[2] as { maxTokens?: number; systemPrompt: string; jsonMode?: boolean; cacheControl?: boolean },
-  ),
+  callLLM: (...args: unknown[]) => callLLMMock(...args),
 }));
 
 // Import after mock is established
-const { runSkillWriter } = await import("../skill-writer.js");
+const { generateSkills } = await import("../skill-writer.js");
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -37,15 +30,32 @@ function makeConfig(overrides: Partial<KairnConfig> = {}): KairnConfig {
   };
 }
 
-function makeTask(items: string[]): SkillWriterTask {
-  return { agent: "skill-writer", items };
+function makeSkeleton(overrides: Partial<SkeletonSpec> = {}): SkeletonSpec {
+  return {
+    name: "test-project",
+    description: "A test project",
+    tools: [],
+    outline: {
+      tech_stack: ["TypeScript", "Node.js"],
+      workflow_type: "development",
+      key_commands: ["build", "test"],
+      custom_rules: [],
+      custom_agents: [],
+      custom_skills: [],
+    },
+    ...overrides,
+  };
+}
+
+function makeTask(items: string[]): AgentTask {
+  return { agent: "skill-writer", items, max_tokens: 4096 };
 }
 
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
 
-describe("runSkillWriter", () => {
+describe("generateSkills", () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
@@ -58,11 +68,13 @@ describe("runSkillWriter", () => {
 
     const config = makeConfig();
     const task = makeTask(["tdd"]);
-    const result: SkillWriterResult = await runSkillWriter(config, task);
+    const result = await generateSkills("Build a TypeScript project", makeSkeleton(), task, config);
 
     expect(result.agent).toBe("skill-writer");
-    expect(Array.isArray(result.skills)).toBe(true);
-    expect(result.skills.length).toBe(1);
+    if (result.agent === "skill-writer") {
+      expect(Array.isArray(result.skills)).toBe(true);
+      expect(result.skills.length).toBe(1);
+    }
   });
 
   it("skills have name and content fields", async () => {
@@ -74,16 +86,18 @@ describe("runSkillWriter", () => {
 
     const config = makeConfig();
     const task = makeTask(["tdd", "debugging"]);
-    const result = await runSkillWriter(config, task);
+    const result = await generateSkills("Build a project", makeSkeleton(), task, config);
 
-    expect(result.skills).toHaveLength(2);
-    for (const skill of result.skills) {
-      expect(skill).toHaveProperty("name");
-      expect(skill).toHaveProperty("content");
-      expect(typeof skill.name).toBe("string");
-      expect(typeof skill.content).toBe("string");
-      expect(skill.name.length).toBeGreaterThan(0);
-      expect(skill.content.length).toBeGreaterThan(0);
+    if (result.agent === "skill-writer") {
+      expect(result.skills).toHaveLength(2);
+      for (const skill of result.skills) {
+        expect(skill).toHaveProperty("name");
+        expect(skill).toHaveProperty("content");
+        expect(typeof skill.name).toBe("string");
+        expect(typeof skill.content).toBe("string");
+        expect(skill.name.length).toBeGreaterThan(0);
+        expect(skill.content.length).toBeGreaterThan(0);
+      }
     }
   });
 
@@ -94,7 +108,7 @@ describe("runSkillWriter", () => {
 
     const config = makeConfig();
     const task = makeTask(["test-skill"]);
-    await runSkillWriter(config, task);
+    await generateSkills("Build a project", makeSkeleton(), task, config);
 
     expect(callLLMMock).toHaveBeenCalledTimes(1);
     const callArgs = callLLMMock.mock.calls[0];
@@ -107,17 +121,19 @@ describe("runSkillWriter", () => {
 
     const config = makeConfig();
     const task = makeTask(["fenced-skill"]);
-    const result = await runSkillWriter(config, task);
+    const result = await generateSkills("Build a project", makeSkeleton(), task, config);
 
-    expect(result.skills).toHaveLength(1);
-    expect(result.skills[0].name).toBe("fenced-skill");
-    expect(result.skills[0].content).toContain("# Fenced");
+    if (result.agent === "skill-writer") {
+      expect(result.skills).toHaveLength(1);
+      expect(result.skills[0].name).toBe("fenced-skill");
+      expect(result.skills[0].content).toContain("# Fenced");
+    }
   });
 
   it("returns empty skills array without making LLM call when items is empty", async () => {
     const config = makeConfig();
     const task = makeTask([]);
-    const result = await runSkillWriter(config, task);
+    const result = await generateSkills("Build a project", makeSkeleton(), task, config);
 
     expect(result).toEqual({ agent: "skill-writer", skills: [] });
     expect(callLLMMock).not.toHaveBeenCalled();
@@ -132,12 +148,14 @@ describe("runSkillWriter", () => {
 
     const config = makeConfig();
     const task = makeTask(["tdd"]);
-    const result = await runSkillWriter(config, task);
+    const result = await generateSkills("Build a project", makeSkeleton(), task, config);
 
-    const skill = result.skills[0];
-    expect(skill.content).toContain("Phase 1: RED");
-    expect(skill.content).toContain("Phase 2: GREEN");
-    expect(skill.content).toContain("Phase 3: REFACTOR");
+    if (result.agent === "skill-writer") {
+      const skill = result.skills[0];
+      expect(skill.content).toContain("Phase 1: RED");
+      expect(skill.content).toContain("Phase 2: GREEN");
+      expect(skill.content).toContain("Phase 3: REFACTOR");
+    }
   });
 
   it("passes skill names in the user message to callLLM", async () => {
@@ -150,9 +168,9 @@ describe("runSkillWriter", () => {
 
     const config = makeConfig();
     const task = makeTask(["deployment", "code-review"]);
-    await runSkillWriter(config, task);
+    await generateSkills("Build a project", makeSkeleton(), task, config);
 
-    const userMessage = callLLMMock.mock.calls[0][1];
+    const userMessage = callLLMMock.mock.calls[0][1] as string;
     expect(userMessage).toContain("deployment");
     expect(userMessage).toContain("code-review");
   });
@@ -163,10 +181,12 @@ describe("runSkillWriter", () => {
 
     const config = makeConfig();
     const task = makeTask(["stripped"]);
-    const result = await runSkillWriter(config, task);
+    const result = await generateSkills("Build a project", makeSkeleton(), task, config);
 
-    expect(result.skills).toHaveLength(1);
-    expect(result.skills[0].name).toBe("stripped");
+    if (result.agent === "skill-writer") {
+      expect(result.skills).toHaveLength(1);
+      expect(result.skills[0].name).toBe("stripped");
+    }
   });
 
   it("throws on malformed JSON from LLM", async () => {
@@ -175,6 +195,6 @@ describe("runSkillWriter", () => {
     const config = makeConfig();
     const task = makeTask(["broken"]);
 
-    await expect(runSkillWriter(config, task)).rejects.toThrow();
+    await expect(generateSkills("Build a project", makeSkeleton(), task, config)).rejects.toThrow();
   });
 });

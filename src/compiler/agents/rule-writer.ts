@@ -10,8 +10,8 @@
 import { callLLM } from '../../llm.js';
 import { createRuleNode } from '../../ir/types.js';
 import type { RuleNode } from '../../ir/types.js';
-import type { KairnConfig } from '../../types.js';
-import type { AgentTask, RuleWriterResult } from './types.js';
+import type { KairnConfig, SkeletonSpec } from '../../types.js';
+import type { AgentTask, AgentResult } from './types.js';
 
 // ---------------------------------------------------------------------------
 // System prompt
@@ -125,19 +125,23 @@ function parseRulesJSON(raw: string): RawLLMRule[] {
 }
 
 // ---------------------------------------------------------------------------
-// Build user message from task
+// Build user message from parameters
 // ---------------------------------------------------------------------------
 
-function buildUserMessage(task: AgentTask): string {
+function buildUserMessage(
+  intent: string,
+  skeleton: SkeletonSpec,
+  task: AgentTask,
+): string {
   const lines: string[] = [
     '## Project intent',
-    task.intent,
+    intent,
     '',
     '## Rules to generate',
     ...task.items.map((item) => `- ${item}`),
     '',
     '## Project context',
-    JSON.stringify(task.context, null, 2),
+    JSON.stringify(skeleton.outline, null, 2),
   ];
   return lines.join('\n');
 }
@@ -147,25 +151,29 @@ function buildUserMessage(task: AgentTask): string {
 // ---------------------------------------------------------------------------
 
 /**
- * Run the @rule-writer specialist agent.
+ * Generate Claude Code rule files via the rule-writer specialist agent.
  *
  * Calls the LLM to generate rule content for the given rule names, then
  * ensures `security` and `continuity` rules are always present.
  *
+ * @param intent - The user's natural-language project description
+ * @param skeleton - The Pass 1 skeleton with tech stack and outline
  * @param task - The agent task containing rule names in `items`
  * @param config - Kairn config for LLM access
- * @returns A RuleWriterResult with the generated rules
+ * @returns An `AgentResult` with `agent: 'rule-writer'` and generated rules
  */
-export async function runRuleWriter(
+export async function generateRules(
+  intent: string,
+  skeleton: SkeletonSpec,
   task: AgentTask,
   config: KairnConfig,
-): Promise<RuleWriterResult> {
+): Promise<AgentResult> {
   // Short-circuit: no items means no rules to generate
   if (task.items.length === 0) {
     return { agent: 'rule-writer', rules: [] };
   }
 
-  const userMessage = buildUserMessage(task);
+  const userMessage = buildUserMessage(intent, skeleton, task);
 
   const raw = await callLLM(config, userMessage, {
     systemPrompt: SYSTEM_PROMPT,

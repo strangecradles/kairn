@@ -9,9 +9,9 @@
  */
 
 import { callLLM } from "../../llm.js";
-import type { KairnConfig } from "../../types.js";
+import type { KairnConfig, SkeletonSpec } from "../../types.js";
 import type { SkillNode } from "../../ir/types.js";
-import type { SkillWriterTask, SkillWriterResult } from "./types.js";
+import type { AgentTask, AgentResult } from "./types.js";
 
 // ---------------------------------------------------------------------------
 // System prompt
@@ -50,7 +50,7 @@ Example:
 function stripCodeFences(raw: string): string {
   const trimmed = raw.trim();
   const fencePattern = /^```(?:json|JSON)?\s*\n?([\s\S]*?)\n?\s*```$/;
-  const match = fencePattern.exec(trimmed);
+  const match = trimmed.match(fencePattern);
   if (match) {
     return match[1].trim();
   }
@@ -97,24 +97,28 @@ function parseSkillNodes(raw: string): SkillNode[] {
 // ---------------------------------------------------------------------------
 
 /**
- * Run the @skill-writer specialist agent.
+ * Generate SkillNode[] via the skill-writer specialist agent.
  *
- * Generates SkillNode[] for the given skill names by calling the LLM.
+ * Produces skill definitions for the given skill names by calling the LLM.
  * Returns immediately with an empty skills array if `task.items` is empty.
  *
+ * @param intent - The user's natural-language project description
+ * @param skeleton - The Pass 1 skeleton (available for future context enrichment)
+ * @param task - The agent task containing skill names to generate
  * @param config - Kairn configuration with provider, API key, and model
- * @param task   - The skill-writer task containing skill names to generate
- * @returns A SkillWriterResult containing the generated skills
+ * @returns An `AgentResult` with `agent: 'skill-writer'` and generated skills
  */
-export async function runSkillWriter(
+export async function generateSkills(
+  _intent: string,
+  _skeleton: SkeletonSpec,
+  task: AgentTask,
   config: KairnConfig,
-  task: SkillWriterTask,
-): Promise<SkillWriterResult> {
+): Promise<AgentResult> {
   if (task.items.length === 0) {
     return { agent: "skill-writer", skills: [] };
   }
 
-  const userMessage = `Generate SKILL.md content for the following skills:\n\n${task.items.map((name) => `- ${name}`).join("\n")}`;
+  const userMessage = `Generate SKILL.md content for the following skills:\n\n${task.items.map((name: string) => `- ${name}`).join("\n")}`;
 
   const raw = await callLLM(config, userMessage, {
     systemPrompt: SYSTEM_PROMPT,

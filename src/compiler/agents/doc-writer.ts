@@ -8,9 +8,9 @@
  */
 
 import { callLLM } from '../../llm.js';
-import type { KairnConfig } from '../../types.js';
+import type { KairnConfig, SkeletonSpec } from '../../types.js';
 import type { DocNode } from '../../ir/types.js';
-import type { AgentTask, DocWriterResult } from './types.js';
+import type { AgentTask, AgentResult } from './types.js';
 
 // ---------------------------------------------------------------------------
 // Default templates for required docs
@@ -107,26 +107,30 @@ export function stripCodeFences(raw: string): string {
 // ---------------------------------------------------------------------------
 
 /**
- * Run the doc-writer specialist agent.
+ * Generate documentation files via the doc-writer specialist agent.
  *
- * Given an `AgentTask` with the project intent and a list of doc names to
- * produce, calls the LLM to generate documentation content, then ensures the
- * three required docs (DECISIONS, LEARNINGS, SPRINT) are always present.
+ * Given an `AgentTask` with a list of doc names to produce, calls the LLM
+ * to generate documentation content, then ensures the three required docs
+ * (DECISIONS, LEARNINGS, SPRINT) are always present.
  *
- * @param task - The agent task with intent and item names
+ * @param intent - The user's natural-language project description
+ * @param skeleton - The Pass 1 skeleton with tech stack and outline
+ * @param task - The agent task with item names
  * @param config - Kairn configuration for the LLM call
- * @returns A `DocWriterResult` with agent identifier and generated docs
+ * @returns An `AgentResult` with `agent: 'doc-writer'` and generated docs
  */
-export async function runDocWriter(
+export async function generateDocs(
+  intent: string,
+  skeleton: SkeletonSpec,
   task: AgentTask,
   config: KairnConfig,
-): Promise<DocWriterResult> {
+): Promise<AgentResult> {
   // Early return for empty items — no docs to generate
   if (task.items.length === 0) {
     return { agent: 'doc-writer', docs: [] };
   }
 
-  const userMessage = buildUserMessage(task);
+  const userMessage = buildUserMessage(intent, skeleton, task);
 
   const rawResponse = await callLLM(config, userMessage, {
     systemPrompt: DOC_WRITER_SYSTEM_PROMPT,
@@ -147,9 +151,13 @@ export async function runDocWriter(
 /**
  * Build the user message for the LLM call.
  */
-function buildUserMessage(task: AgentTask): string {
+function buildUserMessage(
+  intent: string,
+  _skeleton: SkeletonSpec,
+  task: AgentTask,
+): string {
   const itemList = task.items.map((item) => `- ${item}`).join('\n');
-  return `Project intent: ${task.intent}
+  return `Project intent: ${intent}
 
 Generate the following documentation files:
 ${itemList}

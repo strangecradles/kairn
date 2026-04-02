@@ -13,9 +13,9 @@
 
 import { callLLM } from "../../llm.js";
 import { createCommandNode } from "../../ir/types.js";
-import type { KairnConfig } from "../../types.js";
+import type { KairnConfig, SkeletonSpec } from "../../types.js";
 import type { CommandNode } from "../../ir/types.js";
-import type { AgentTask, CommandWriterResult } from "./types.js";
+import type { AgentTask, AgentResult } from "./types.js";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -132,13 +132,18 @@ function parseCommandResponse(text: string): RawCommand[] {
 // User message construction
 // ---------------------------------------------------------------------------
 
-function buildUserMessage(task: AgentTask, batchItems: string[], phaseAContext?: string): string {
+function buildUserMessage(
+  intent: string,
+  skeleton: SkeletonSpec,
+  batchItems: string[],
+  phaseAContext?: string,
+): string {
   const lines: string[] = [];
 
   lines.push("## Project Context");
-  lines.push(`Intent: ${task.intent}`);
-  lines.push(`Tech stack: ${task.outline.tech_stack.join(", ")}`);
-  lines.push(`Workflow type: ${task.outline.workflow_type}`);
+  lines.push(`Intent: ${intent}`);
+  lines.push(`Tech stack: ${skeleton.outline.tech_stack.join(", ")}`);
+  lines.push(`Workflow type: ${skeleton.outline.workflow_type}`);
   lines.push("");
 
   if (phaseAContext) {
@@ -208,12 +213,13 @@ function deduplicateCommands(commands: CommandNode[]): CommandNode[] {
 
 /** Call the LLM for a batch of items and return parsed CommandNode[]. */
 async function generateBatch(
-  task: AgentTask,
+  intent: string,
+  skeleton: SkeletonSpec,
   batchItems: string[],
   config: KairnConfig,
   phaseAContext?: string,
 ): Promise<CommandNode[]> {
-  const userMessage = buildUserMessage(task, batchItems, phaseAContext);
+  const userMessage = buildUserMessage(intent, skeleton, batchItems, phaseAContext);
   const responseText = await callLLM(config, userMessage, {
     systemPrompt: SYSTEM_PROMPT,
     cacheControl: true,
@@ -229,22 +235,24 @@ async function generateBatch(
 // ---------------------------------------------------------------------------
 
 /**
- * Run the @command-writer specialist agent.
+ * Generate `CommandNode[]` via the command-writer specialist agent.
  *
- * Generates `CommandNode[]` by calling the LLM with a command-generation prompt.
+ * Calls the LLM with a command-generation prompt.
  * Batches items into groups of 8 when there are more than 10 items.
  * Always ensures a `help` command is present in the result.
  *
+ * @param intent - The user's natural-language project description
+ * @param skeleton - The Pass 1 skeleton with tech stack and outline
  * @param task - The agent task containing items (command names) to generate
  * @param config - Kairn config with LLM provider settings
- * @param phaseAContext - Optional context sections from Phase A compilation
- * @returns A `CommandWriterResult` with the generated commands
+ * @returns An `AgentResult` with `agent: 'command-writer'` and generated commands
  */
-export async function runCommandWriter(
+export async function generateCommands(
+  intent: string,
+  skeleton: SkeletonSpec,
   task: AgentTask,
   config: KairnConfig,
-  phaseAContext?: string,
-): Promise<CommandWriterResult> {
+): Promise<AgentResult> {
   // Empty items: return immediately without calling LLM
   if (task.items.length === 0) {
     return { agent: "command-writer", commands: [] };
@@ -258,14 +266,14 @@ export async function runCommandWriter(
     const batchResults: CommandNode[][] = [];
 
     for (const batch of batches) {
-      const nodes = await generateBatch(task, batch, config, phaseAContext);
+      const nodes = await generateBatch(intent, skeleton, batch, config);
       batchResults.push(nodes);
     }
 
     allCommands = deduplicateCommands(batchResults.flat());
   } else {
     // Single call mode
-    allCommands = await generateBatch(task, task.items, config, phaseAContext);
+    allCommands = await generateBatch(intent, skeleton, task.items, config);
   }
 
   // Ensure help command exists

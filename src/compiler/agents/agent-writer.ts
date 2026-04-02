@@ -9,9 +9,9 @@
  */
 
 import { callLLM } from '../../llm.js';
-import type { KairnConfig } from '../../types.js';
+import type { KairnConfig, SkeletonSpec } from '../../types.js';
 import type { AgentNode } from '../../ir/types.js';
-import type { AgentTask, AgentWriterResult } from './types.js';
+import type { AgentTask, AgentResult } from './types.js';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -218,19 +218,23 @@ function chunk<T>(arr: T[], size: number): T[][] {
 // ---------------------------------------------------------------------------
 
 /**
- * Run the @agent-writer specialist agent.
+ * Generate AgentNode[] via the agent-writer specialist agent.
  *
- * Generates AgentNode[] from a list of agent names and user intent.
+ * Produces agent persona definitions from a list of agent names and user intent.
  * Batches into multiple LLM calls if items.length > 8 (batches of 6).
  *
+ * @param intent - The user's natural-language project description
+ * @param skeleton - The Pass 1 skeleton (unused directly, available for future context)
+ * @param task - The agent task with items (agent names to generate)
  * @param config - Kairn configuration with provider, API key, and model
- * @param task - The agent task with items, intent, and optional phaseAContext
- * @returns AgentWriterResult with the generated agents
+ * @returns An `AgentResult` with `agent: 'agent-writer'` and generated agents
  */
-export async function runAgentWriter(
-  config: KairnConfig,
+export async function generateAgents(
+  intent: string,
+  _skeleton: SkeletonSpec,
   task: AgentTask,
-): Promise<AgentWriterResult> {
+  config: KairnConfig,
+): Promise<AgentResult> {
   // Short-circuit: no items means no agents
   if (task.items.length === 0) {
     return { agent: 'agent-writer', agents: [] };
@@ -245,7 +249,7 @@ export async function runAgentWriter(
   const allAgents: AgentNode[] = [];
 
   for (const batch of batches) {
-    const userMessage = buildUserMessage(batch, task.intent, task.phaseAContext);
+    const userMessage = buildUserMessage(batch, intent, task.context_hint);
 
     const response = await callLLM(config, userMessage, {
       systemPrompt: AGENT_WRITER_SYSTEM_PROMPT,

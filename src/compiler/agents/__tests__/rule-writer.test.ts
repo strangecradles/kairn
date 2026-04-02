@@ -1,5 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { AgentTask } from '../types.js';
+import type { KairnConfig, SkeletonSpec } from '../../../types.js';
+import type { RuleNode } from '../../../ir/types.js';
 
 // ---------------------------------------------------------------------------
 // Mock callLLM before importing the module under test
@@ -12,21 +14,45 @@ vi.mock('../../../llm.js', () => ({
 }));
 
 // Import after mocking
-const { runRuleWriter } = await import('../rule-writer.js');
+const { generateRules } = await import('../rule-writer.js');
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
+function makeConfig(overrides: Partial<KairnConfig> = {}): KairnConfig {
+  return {
+    provider: 'anthropic',
+    api_key: 'test-key',
+    model: 'claude-sonnet-4-6',
+    default_runtime: 'claude-code',
+    created_at: new Date().toISOString(),
+    ...overrides,
+  };
+}
+
+function makeSkeleton(overrides: Partial<SkeletonSpec> = {}): SkeletonSpec {
+  return {
+    name: 'test-project',
+    description: 'A test project',
+    tools: [],
+    outline: {
+      tech_stack: ['typescript', 'express', 'vitest'],
+      workflow_type: 'api-development',
+      key_commands: ['build', 'test'],
+      custom_rules: [],
+      custom_agents: [],
+      custom_skills: [],
+    },
+    ...overrides,
+  };
+}
+
 function makeTask(overrides: Partial<AgentTask> = {}): AgentTask {
   return {
     agent: 'rule-writer',
     items: ['security', 'api-conventions', 'testing'],
-    intent: 'Build a REST API with Express and TypeScript',
-    context: {
-      tech_stack: ['typescript', 'express', 'vitest'],
-      workflow_type: 'api-development',
-    },
+    max_tokens: 8192,
     ...overrides,
   };
 }
@@ -40,7 +66,7 @@ function fenced(json: string): string {
 // Tests
 // ---------------------------------------------------------------------------
 
-describe('runRuleWriter', () => {
+describe('generateRules', () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
@@ -55,17 +81,18 @@ describe('runRuleWriter', () => {
     ]);
     callLLMMock.mockResolvedValueOnce(llmResponse);
 
-    const result = await runRuleWriter(makeTask(), {
-      provider: 'anthropic',
-      api_key: 'test-key',
-      model: 'claude-sonnet-4-6',
-      default_runtime: 'claude-code',
-      created_at: new Date().toISOString(),
-    });
+    const result = await generateRules(
+      'Build a REST API with Express and TypeScript',
+      makeSkeleton(),
+      makeTask(),
+      makeConfig(),
+    );
 
     expect(result.agent).toBe('rule-writer');
-    expect(Array.isArray(result.rules)).toBe(true);
-    expect(result.rules.length).toBe(3);
+    if (result.agent === 'rule-writer') {
+      expect(Array.isArray(result.rules)).toBe(true);
+      expect(result.rules.length).toBe(3);
+    }
   });
 
   // -- Default rule injection -------------------------------------------------
@@ -77,17 +104,18 @@ describe('runRuleWriter', () => {
     ]);
     callLLMMock.mockResolvedValueOnce(llmResponse);
 
-    const result = await runRuleWriter(makeTask(), {
-      provider: 'anthropic',
-      api_key: 'test-key',
-      model: 'claude-sonnet-4-6',
-      default_runtime: 'claude-code',
-      created_at: new Date().toISOString(),
-    });
+    const result = await generateRules(
+      'Build a REST API with Express and TypeScript',
+      makeSkeleton(),
+      makeTask(),
+      makeConfig(),
+    );
 
-    const securityRule = result.rules.find((r) => r.name === 'security');
-    expect(securityRule).toBeDefined();
-    expect(securityRule!.content).toBeTruthy();
+    if (result.agent === 'rule-writer') {
+      const securityRule = result.rules.find((r: RuleNode) => r.name === 'security');
+      expect(securityRule).toBeDefined();
+      expect(securityRule!.content).toBeTruthy();
+    }
   });
 
   it('injects default continuity rule when LLM omits it', async () => {
@@ -97,17 +125,18 @@ describe('runRuleWriter', () => {
     ]);
     callLLMMock.mockResolvedValueOnce(llmResponse);
 
-    const result = await runRuleWriter(makeTask(), {
-      provider: 'anthropic',
-      api_key: 'test-key',
-      model: 'claude-sonnet-4-6',
-      default_runtime: 'claude-code',
-      created_at: new Date().toISOString(),
-    });
+    const result = await generateRules(
+      'Build a REST API with Express and TypeScript',
+      makeSkeleton(),
+      makeTask(),
+      makeConfig(),
+    );
 
-    const continuityRule = result.rules.find((r) => r.name === 'continuity');
-    expect(continuityRule).toBeDefined();
-    expect(continuityRule!.content).toBeTruthy();
+    if (result.agent === 'rule-writer') {
+      const continuityRule = result.rules.find((r: RuleNode) => r.name === 'continuity');
+      expect(continuityRule).toBeDefined();
+      expect(continuityRule!.content).toBeTruthy();
+    }
   });
 
   it('does not duplicate security rule when LLM already includes it', async () => {
@@ -117,17 +146,18 @@ describe('runRuleWriter', () => {
     ]);
     callLLMMock.mockResolvedValueOnce(llmResponse);
 
-    const result = await runRuleWriter(makeTask(), {
-      provider: 'anthropic',
-      api_key: 'test-key',
-      model: 'claude-sonnet-4-6',
-      default_runtime: 'claude-code',
-      created_at: new Date().toISOString(),
-    });
+    const result = await generateRules(
+      'Build a REST API with Express and TypeScript',
+      makeSkeleton(),
+      makeTask(),
+      makeConfig(),
+    );
 
-    const securityRules = result.rules.filter((r) => r.name === 'security');
-    expect(securityRules.length).toBe(1);
-    expect(securityRules[0].content).toBe('Custom security policy.');
+    if (result.agent === 'rule-writer') {
+      const securityRules = result.rules.filter((r: RuleNode) => r.name === 'security');
+      expect(securityRules.length).toBe(1);
+      expect(securityRules[0].content).toBe('Custom security policy.');
+    }
   });
 
   // -- Path scoping -----------------------------------------------------------
@@ -140,17 +170,18 @@ describe('runRuleWriter', () => {
     ]);
     callLLMMock.mockResolvedValueOnce(llmResponse);
 
-    const result = await runRuleWriter(makeTask(), {
-      provider: 'anthropic',
-      api_key: 'test-key',
-      model: 'claude-sonnet-4-6',
-      default_runtime: 'claude-code',
-      created_at: new Date().toISOString(),
-    });
+    const result = await generateRules(
+      'Build a REST API with Express and TypeScript',
+      makeSkeleton(),
+      makeTask(),
+      makeConfig(),
+    );
 
-    const apiRule = result.rules.find((r) => r.name === 'api');
-    expect(apiRule).toBeDefined();
-    expect(apiRule!.paths).toEqual(['src/api/**', 'src/routes/**']);
+    if (result.agent === 'rule-writer') {
+      const apiRule = result.rules.find((r: RuleNode) => r.name === 'api');
+      expect(apiRule).toBeDefined();
+      expect(apiRule!.paths).toEqual(['src/api/**', 'src/routes/**']);
+    }
   });
 
   it('leaves paths as undefined for global rules (paths: null)', async () => {
@@ -160,17 +191,18 @@ describe('runRuleWriter', () => {
     ]);
     callLLMMock.mockResolvedValueOnce(llmResponse);
 
-    const result = await runRuleWriter(makeTask(), {
-      provider: 'anthropic',
-      api_key: 'test-key',
-      model: 'claude-sonnet-4-6',
-      default_runtime: 'claude-code',
-      created_at: new Date().toISOString(),
-    });
+    const result = await generateRules(
+      'Build a REST API with Express and TypeScript',
+      makeSkeleton(),
+      makeTask(),
+      makeConfig(),
+    );
 
-    const securityRule = result.rules.find((r) => r.name === 'security');
-    expect(securityRule).toBeDefined();
-    expect(securityRule!.paths).toBeUndefined();
+    if (result.agent === 'rule-writer') {
+      const securityRule = result.rules.find((r: RuleNode) => r.name === 'security');
+      expect(securityRule).toBeDefined();
+      expect(securityRule!.paths).toBeUndefined();
+    }
   });
 
   // -- LLM call options -------------------------------------------------------
@@ -182,13 +214,12 @@ describe('runRuleWriter', () => {
     ]);
     callLLMMock.mockResolvedValueOnce(llmResponse);
 
-    await runRuleWriter(makeTask(), {
-      provider: 'anthropic',
-      api_key: 'test-key',
-      model: 'claude-sonnet-4-6',
-      default_runtime: 'claude-code',
-      created_at: new Date().toISOString(),
-    });
+    await generateRules(
+      'Build a REST API with Express and TypeScript',
+      makeSkeleton(),
+      makeTask(),
+      makeConfig(),
+    );
 
     expect(callLLMMock).toHaveBeenCalledTimes(1);
     const callArgs = callLLMMock.mock.calls[0];
@@ -202,13 +233,12 @@ describe('runRuleWriter', () => {
     ]);
     callLLMMock.mockResolvedValueOnce(llmResponse);
 
-    await runRuleWriter(makeTask(), {
-      provider: 'anthropic',
-      api_key: 'test-key',
-      model: 'claude-sonnet-4-6',
-      default_runtime: 'claude-code',
-      created_at: new Date().toISOString(),
-    });
+    await generateRules(
+      'Build a REST API with Express and TypeScript',
+      makeSkeleton(),
+      makeTask(),
+      makeConfig(),
+    );
 
     const callArgs = callLLMMock.mock.calls[0];
     expect(typeof callArgs[2].systemPrompt).toBe('string');
@@ -226,16 +256,17 @@ describe('runRuleWriter', () => {
     );
     callLLMMock.mockResolvedValueOnce(llmResponse);
 
-    const result = await runRuleWriter(makeTask(), {
-      provider: 'anthropic',
-      api_key: 'test-key',
-      model: 'claude-sonnet-4-6',
-      default_runtime: 'claude-code',
-      created_at: new Date().toISOString(),
-    });
+    const result = await generateRules(
+      'Build a REST API with Express and TypeScript',
+      makeSkeleton(),
+      makeTask(),
+      makeConfig(),
+    );
 
     expect(result.agent).toBe('rule-writer');
-    expect(result.rules.length).toBeGreaterThanOrEqual(2);
+    if (result.agent === 'rule-writer') {
+      expect(result.rules.length).toBeGreaterThanOrEqual(2);
+    }
   });
 
   // -- Empty items → no LLM call ---------------------------------------------
@@ -243,13 +274,12 @@ describe('runRuleWriter', () => {
   it('returns empty rules without calling LLM when items is empty', async () => {
     const task = makeTask({ items: [] });
 
-    const result = await runRuleWriter(task, {
-      provider: 'anthropic',
-      api_key: 'test-key',
-      model: 'claude-sonnet-4-6',
-      default_runtime: 'claude-code',
-      created_at: new Date().toISOString(),
-    });
+    const result = await generateRules(
+      'Build a REST API with Express and TypeScript',
+      makeSkeleton(),
+      task,
+      makeConfig(),
+    );
 
     expect(result).toEqual({ agent: 'rule-writer', rules: [] });
     expect(callLLMMock).not.toHaveBeenCalled();
