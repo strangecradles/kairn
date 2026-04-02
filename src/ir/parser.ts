@@ -56,7 +56,7 @@ function slugify(heading: string): string {
 }
 
 /** Resolve a heading string to a well-known section ID or a custom-* slug. */
-function resolveSectionId(heading: string): string {
+export function resolveSectionId(heading: string): string {
   const trimmed = heading.trim();
   for (const entry of SECTION_ID_MAP) {
     if (entry.pattern.test(trimmed)) {
