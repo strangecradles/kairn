@@ -94,7 +94,7 @@ if (shouldRoute) {
 `;
 
 const PERSIST_ROUTER_HOOK = {
-  matcher: '*',
+  matcher: '',
   hooks: [{
     type: 'command',
     command: 'node "$CLAUDE_PROJECT_DIR/.claude/hooks/persist-router.mjs"',

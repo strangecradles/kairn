@@ -81,7 +81,7 @@ describe("TASK_GENERATION_PROMPT", () => {
 });
 
 describe("EVAL_TEMPLATES", () => {
-  it("has all six eval template entries", () => {
+  it("has all eleven eval template entries", () => {
     const keys = Object.keys(EVAL_TEMPLATES);
     expect(keys).toContain("add-feature");
     expect(keys).toContain("fix-bug");
