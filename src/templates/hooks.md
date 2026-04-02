@@ -11,7 +11,51 @@ not LLM-controlled. Zero token cost unless type is `prompt` or `agent`.
   "matcher": "Bash",
   "hooks": [{
     "type": "command",
-    "command": "CMD=$(cat | jq -r '.tool_input.command // empty') && echo \"$CMD\" | grep -qiE 'rm\\s+-rf\\s+/|DROP\\s+TABLE|curl.*\\|\\s*sh|:(){ :|:& };:' && echo 'Blocked destructive command' >&2 && exit 2 || true"
+    "command": "CMD=$(cat | jq -r '.tool_input.command // empty') && echo \"$CMD\" | grep -qiE 'rm\\s+-rf\\s+/|DROP\\s+TABLE|DROP\\s+DATABASE|curl.*\\|\\s*sh|:(){ :|:& };:' && echo 'Blocked destructive command' >&2 && exit 2 || true"
+  }]
+}
+```
+
+### Block Force Push and Dangerous Git (PreToolUse)
+```json
+{
+  "matcher": "Bash",
+  "hooks": [{
+    "type": "command",
+    "command": "CMD=$(cat | jq -r '.tool_input.command // empty') && echo \"$CMD\" | grep -qiE 'git\\s+push.*--force(?!-with-lease)|ch(mod|own).*-R\\s+/|npm\\s+publish(?!.*--dry-run)' && echo 'Blocked dangerous operation' >&2 && exit 2 || true"
+  }]
+}
+```
+
+### Block Credential Leaks in Output (PreToolUse)
+```json
+{
+  "matcher": "Bash",
+  "hooks": [{
+    "type": "command",
+    "command": "CMD=$(cat | jq -r '.tool_input.command // empty') && echo \"$CMD\" | grep -qiE '(api[_-]?key|secret|token|password)\\s*[:=]|AWS_SECRET_ACCESS_KEY|AKIA[0-9A-Z]{16}|BEGIN.*PRIVATE\\s+KEY' && echo 'Blocked potential credential leak' >&2 && exit 2 || true"
+  }]
+}
+```
+
+### Block Injection Patterns (PreToolUse)
+```json
+{
+  "matcher": "Bash",
+  "hooks": [{
+    "type": "command",
+    "command": "CMD=$(cat | jq -r '.tool_input.command // empty') && echo \"$CMD\" | grep -qiE ';\\s*(DROP|DELETE|ALTER|TRUNCATE)\\s+|\\.\\.\/\\.\\.\/\\.\\.\/' && echo 'Blocked injection pattern' >&2 && exit 2 || true"
+  }]
+}
+```
+
+### Block Network Exfiltration (PreToolUse)
+```json
+{
+  "matcher": "Bash",
+  "hooks": [{
+    "type": "command",
+    "command": "CMD=$(cat | jq -r '.tool_input.command // empty') && echo \"$CMD\" | grep -qiE 'nc\\s+.*-e|/dev/tcp/|bash\\s+-i|curl.*-d.*@|wget.*--post-file' && echo 'Blocked network exfiltration' >&2 && exit 2 || true"
   }]
 }
 ```
@@ -22,7 +66,7 @@ not LLM-controlled. Zero token cost unless type is `prompt` or `agent`.
   "matcher": "Edit|Write",
   "hooks": [{
     "type": "command",
-    "command": "FILE=$(cat | jq -r '.tool_input.file_path // empty') && echo \"$FILE\" | grep -qE '(\\.env$|\\.env\\.|secrets/|credentials|id_rsa)' && echo 'Cannot modify secret files' >&2 && exit 2 || true"
+    "command": "FILE=$(cat | jq -r '.tool_input.file_path // empty') && echo \"$FILE\" | grep -qE '(\\.env$|\\.env\\.|secrets/|credentials\\.json|service-account\\.json|id_rsa|\\.pem$)' && echo 'Cannot modify secret files' >&2 && exit 2 || true"
   }]
 }
 ```

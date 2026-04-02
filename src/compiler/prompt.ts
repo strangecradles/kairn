@@ -242,17 +242,19 @@ Only generate scoped rules when the workflow involves multiple code domains.
 
 Generate hooks in settings.json based on project type:
 
-**All code projects** — block destructive commands:
+**All code projects** — block destructive commands, credential leaks, injection, and network exfiltration:
 \`\`\`json
 {
   "hooks": {
-    "PreToolUse": [{
-      "matcher": "Bash",
-      "hooks": [{
-        "type": "command",
-        "command": "CMD=$(cat | jq -r '.tool_input.command // empty') && echo \\"$CMD\\" | grep -qiE 'rm\\\\s+-rf\\\\s+/|DROP\\\\s+TABLE|curl.*\\\\|\\\\s*sh' && echo 'Blocked destructive command' >&2 && exit 2 || true"
-      }]
-    }]
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [{
+          "type": "command",
+          "command": "CMD=$(cat | jq -r '.tool_input.command // empty') && echo \\"$CMD\\" | grep -qiE 'rm\\\\s+-rf\\\\s+/|DROP\\\\s+(TABLE|DATABASE)|curl.*\\\\|\\\\s*sh|:(){ :|:& };:|git\\\\s+push.*--force(?!-with-lease)|ch(mod|own).*-R\\\\s+/|npm\\\\s+publish(?!.*--dry-run)|(api[_-]?key|secret|token|password)\\\\s*[:=]|AKIA[0-9A-Z]{16}|BEGIN.*PRIVATE\\\\s+KEY|;\\\\s*(DROP|DELETE|ALTER|TRUNCATE)\\\\s+|\\\\.\\\\./\\\\.\\\\./\\\\.\\\\.\/|nc\\\\s+.*-e|/dev/tcp/|bash\\\\s+-i|curl.*-d.*@|wget.*--post-file' && echo 'Blocked dangerous command' >&2 && exit 2 || true"
+        }]
+      }
+    ]
   }
 }
 \`\`\`
