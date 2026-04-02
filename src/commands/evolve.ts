@@ -542,6 +542,125 @@ evolveCommand
     }
   });
 
+// --- kairn evolve pbt ---
+evolveCommand
+  .command('pbt')
+  .description('Run Population-Based Training with parallel evolution branches')
+  .option('--branches <n>', 'Number of parallel branches', '3')
+  .option('--iterations <n>', 'Iterations per branch', '5')
+  .option('--parallel <n>', 'Tasks per branch concurrently', '2')
+  .option('--sampling <strategy>', 'Task sampling strategy: thompson or uniform', 'thompson')
+  .option('--kl-lambda <n>', 'KL regularization strength (0 = disabled)', '0.1')
+  .option('--eval-sample <n>', 'Sample N tasks per middle iteration (0 = all)', '5')
+  .action(async (options: { branches?: string; iterations?: string; parallel?: string; sampling?: string; klLambda?: string; evalSample?: string }) => {
+    try {
+      const projectRoot = process.cwd();
+      const workspace = path.join(projectRoot, '.kairn-evolve');
+
+      console.log(ui.section('Evolve PBT'));
+
+      // Verify workspace exists
+      try {
+        await fs.access(workspace);
+      } catch {
+        console.log(ui.error('No .kairn-evolve/ directory found. Run kairn evolve init first.'));
+        process.exit(1);
+      }
+
+      // Verify baseline exists
+      try {
+        await fs.access(path.join(workspace, 'iterations', '0', 'harness'));
+      } catch {
+        console.log(ui.error('No baseline harness found. Run kairn evolve baseline first.'));
+        process.exit(1);
+      }
+
+      const kairnConfig = await loadConfig();
+      if (!kairnConfig) {
+        console.log(ui.error('No config found. Run kairn init first.'));
+        process.exit(1);
+      }
+
+      const evolveConfig = await loadEvolveConfigFromWorkspace(workspace);
+
+      // Parse options
+      const numBranches = parseInt(options.branches ?? '3', 10);
+      evolveConfig.maxIterations = parseInt(options.iterations ?? '5', 10);
+      evolveConfig.parallelTasks = parseInt(options.parallel ?? '2', 10);
+      evolveConfig.evalSampleSize = parseInt(options.evalSample ?? '5', 10);
+      evolveConfig.klLambda = parseFloat(options.klLambda ?? '0.1');
+      const sampling = options.sampling ?? 'thompson';
+      if (sampling === 'thompson' || sampling === 'uniform') {
+        evolveConfig.samplingStrategy = sampling;
+      }
+
+      // Load tasks
+      const tasksPath = path.join(workspace, 'tasks.yaml');
+      const tasksContent = await fs.readFile(tasksPath, 'utf-8');
+      const parsed = yamlParse(tasksContent) as TasksFile;
+      if (!parsed?.tasks || parsed.tasks.length === 0) {
+        console.log(ui.error('No tasks found in tasks.yaml'));
+        process.exit(1);
+      }
+
+      console.log(chalk.dim(`  Branches: ${numBranches}, Iterations: ${evolveConfig.maxIterations}, Parallel: ${evolveConfig.parallelTasks}`));
+      console.log(chalk.dim(`  Sampling: ${evolveConfig.samplingStrategy}, KL Lambda: ${evolveConfig.klLambda}`));
+      console.log('');
+
+      const { runPopulation } = await import('../evolve/population.js');
+
+      const result = await runPopulation(
+        workspace,
+        parsed.tasks,
+        kairnConfig,
+        evolveConfig,
+        numBranches,
+        (event) => {
+          const branchPrefix = event.branchId !== undefined ? chalk.dim(`[branch ${event.branchId}] `) : '';
+          switch (event.type) {
+            case 'iteration-start':
+              console.log(`${branchPrefix}${ui.section(`Iteration ${event.iteration}`)}`);
+              break;
+            case 'iteration-scored': {
+              const scoreColor = event.score !== undefined && event.score >= 100
+                ? chalk.green
+                : event.score !== undefined && event.score >= 60
+                  ? chalk.yellow
+                  : chalk.red;
+              console.log(`${branchPrefix}  Score: ${scoreColor((event.score?.toFixed(1) ?? '0') + '%')}`);
+              break;
+            }
+            case 'complete':
+              break;
+            default:
+              if (event.message) {
+                console.log(`${branchPrefix}  ${chalk.dim(event.message)}`);
+              }
+              break;
+          }
+        },
+      );
+
+      // Print PBT summary
+      console.log(ui.section('PBT Results'));
+      for (const branch of result.branches) {
+        const marker = branch.branchId === result.bestBranch ? chalk.green(' <- BEST') : '';
+        console.log(`  Branch ${branch.branchId}:  ${branch.result.bestScore.toFixed(1)}%  (${branch.result.iterations.length} iterations)${marker}`);
+      }
+      if (result.synthesizedResult) {
+        const synthMarker = result.synthesizedResult.bestScore > result.bestScore ? chalk.green(' <- BEST') : '';
+        console.log(`  ${'─'.repeat(40)}`);
+        console.log(`  Meta-Principal: ${result.synthesizedResult.bestScore.toFixed(1)}%${synthMarker}`);
+      }
+      console.log('');
+      console.log(ui.success(`Best: Branch ${result.bestBranch} with ${result.bestScore.toFixed(1)}%`));
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.log(ui.error(msg));
+      process.exit(1);
+    }
+  });
+
 // --- kairn evolve apply ---
 evolveCommand
   .command('apply')
