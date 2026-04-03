@@ -212,5 +212,5 @@ export const analyzeCommand = new Command('analyze')
   )
   .option('--refresh', 'Force re-analysis, bypassing cache')
   .option('--json', 'Output raw JSON (for piping)')
-  .option('--token-budget <tokens>', 'Max tokens of source code to sample (default: 150000)', parseInt)
+  .option('--token-budget <tokens>', 'Max tokens of source code to sample (default: 60000)', parseInt)
   .action(analyzeAction);

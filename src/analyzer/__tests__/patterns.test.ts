@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { getStrategy, getAlwaysInclude, STRATEGIES } from '../patterns.js';
+import { getStrategy, getAlwaysInclude, STRATEGIES, classifyFilePriority, FileTier } from '../patterns.js';
 import type { SamplingStrategy } from '../patterns.js';
 
 describe('getStrategy', () => {
@@ -97,4 +97,44 @@ describe('STRATEGIES completeness', () => {
       expect(strategy.maxFilesPerCategory).toBe(5);
     },
   );
+});
+
+describe('classifyFilePriority', () => {
+  const ts = getStrategy('typescript')!;
+  const py = getStrategy('python')!;
+
+  it('classifies README.md as IDENTITY (tier 0)', () => {
+    expect(classifyFilePriority('README.md', ts)).toBe(FileTier.IDENTITY);
+  });
+
+  it('classifies config files as IDENTITY', () => {
+    expect(classifyFilePriority('package.json', ts)).toBe(FileTier.IDENTITY);
+    expect(classifyFilePriority('tsconfig.json', ts)).toBe(FileTier.IDENTITY);
+    expect(classifyFilePriority('pyproject.toml', py)).toBe(FileTier.IDENTITY);
+  });
+
+  it('classifies entry points as ENTRY (tier 1)', () => {
+    expect(classifyFilePriority('src/index.ts', ts)).toBe(FileTier.ENTRY);
+    expect(classifyFilePriority('src/cli.ts', ts)).toBe(FileTier.ENTRY);
+    expect(classifyFilePriority('main.py', py)).toBe(FileTier.ENTRY);
+    expect(classifyFilePriority('app.py', py)).toBe(FileTier.ENTRY);
+  });
+
+  it('classifies domain directory files as DOMAIN (tier 2)', () => {
+    expect(classifyFilePriority('src/services/auth.ts', ts)).toBe(FileTier.DOMAIN);
+    expect(classifyFilePriority('src/api/routes.ts', ts)).toBe(FileTier.DOMAIN);
+    expect(classifyFilePriority('src/core/engine.py', py)).toBe(FileTier.DOMAIN);
+    expect(classifyFilePriority('api/views.py', py)).toBe(FileTier.DOMAIN);
+  });
+
+  it('classifies other files as OTHER (tier 3)', () => {
+    expect(classifyFilePriority('src/utils/helpers.ts', ts)).toBe(FileTier.OTHER);
+    expect(classifyFilePriority('scripts/deploy.py', py)).toBe(FileTier.OTHER);
+  });
+
+  it('priority order: IDENTITY < ENTRY < DOMAIN < OTHER', () => {
+    expect(FileTier.IDENTITY).toBeLessThan(FileTier.ENTRY);
+    expect(FileTier.ENTRY).toBeLessThan(FileTier.DOMAIN);
+    expect(FileTier.DOMAIN).toBeLessThan(FileTier.OTHER);
+  });
 });

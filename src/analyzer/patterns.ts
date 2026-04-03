@@ -154,3 +154,62 @@ export function getStrategy(language: string | null): SamplingStrategy | null {
 export function getAlwaysInclude(): string[] {
   return ['README.md', 'README.rst', '*.toml', '*.yaml', '*.yml'];
 }
+
+/**
+ * Priority tiers for file sampling. Lower number = higher priority.
+ * When a token budget forces truncation, files are dropped from the
+ * highest tier number first, guaranteeing that entry points, READMEs,
+ * and config files always survive.
+ */
+export const enum FileTier {
+  /** README, project config — project identity (always kept) */
+  IDENTITY = 0,
+  /** Entry points — what starts the app */
+  ENTRY = 1,
+  /** Core domain files in known domain directories */
+  DOMAIN = 2,
+  /** Everything else that matched include patterns */
+  OTHER = 3,
+}
+
+/**
+ * Classify a file path into a priority tier for budget truncation.
+ *
+ * @param filePath - Relative file path (e.g. "src/cli.ts", "README.md")
+ * @param strategy - The language sampling strategy being used
+ * @returns The priority tier (lower = higher priority, kept first)
+ */
+export function classifyFilePriority(filePath: string, strategy: SamplingStrategy): FileTier {
+  const lower = filePath.toLowerCase();
+
+  // Tier 0: README and config files — project identity
+  if (lower.startsWith('readme') || lower.endsWith('readme.md') || lower.endsWith('readme.rst')) {
+    return FileTier.IDENTITY;
+  }
+  for (const cfg of strategy.configPatterns) {
+    if (lower === cfg.toLowerCase() || filePath === cfg) {
+      return FileTier.IDENTITY;
+    }
+  }
+  // Also catch always-include config files
+  if (lower === 'package.json' || lower === 'pyproject.toml' || lower === 'cargo.toml' || lower === 'go.mod') {
+    return FileTier.IDENTITY;
+  }
+
+  // Tier 1: Entry points — what boots the app
+  for (const entry of strategy.entryPoints) {
+    if (filePath === entry || lower === entry.toLowerCase()) {
+      return FileTier.ENTRY;
+    }
+  }
+
+  // Tier 2: Domain directories — the interesting code
+  for (const domain of strategy.domainPatterns) {
+    if (filePath.startsWith(domain) || lower.startsWith(domain.toLowerCase())) {
+      return FileTier.DOMAIN;
+    }
+  }
+
+  // Tier 3: Everything else
+  return FileTier.OTHER;
+}

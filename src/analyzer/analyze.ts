@@ -16,7 +16,8 @@ import type {
   ConfigKey,
 } from './types.js';
 import { AnalysisError } from './types.js';
-import { getStrategy, getAlwaysInclude } from './patterns.js';
+import { getStrategy, getAlwaysInclude, classifyFilePriority } from './patterns.js';
+import type { SamplingStrategy } from './patterns.js';
 import { packCodebase } from './repomix-adapter.js';
 import {
   readCache,
@@ -102,9 +103,11 @@ Return a single JSON object (no markdown fences, no explanation):
  * @throws {AnalysisError} With type `empty_sample` if no source files are found.
  * @throws {AnalysisError} With type `llm_parse_failure` if the LLM response is not valid JSON or missing required fields.
  */
-/** Default token budget for codebase sampling. 150K tokens covers ~85% of a
- *  medium codebase (20K LOC) and costs <$0.50 on Sonnet. Cached after first run. */
-const DEFAULT_TOKEN_BUDGET = 150_000;
+/** Default token budget for codebase sampling. 60K tokens covers ~30-40% of a
+ *  medium codebase, but with priority-tiered sampling the most important files
+ *  (entry points, config, core domain) are guaranteed to be included. Costs
+ *  ~$0.18 on Sonnet, cached after first run. */
+const DEFAULT_TOKEN_BUDGET = 60_000;
 
 export async function analyzeProject(
   dir: string,
@@ -144,11 +147,13 @@ export async function analyzeProject(
     ...getAlwaysInclude(),
   ];
 
-  // 4. Pack codebase with repomix
+  // 4. Pack codebase with repomix (priority-tiered truncation)
+  const strat: SamplingStrategy = strategy;
   const packed = await packCodebase(dir, {
     include,
     exclude: strategy.excludePatterns,
     maxTokens: options?.tokenBudget ?? DEFAULT_TOKEN_BUDGET,
+    prioritize: (filePath: string) => classifyFilePriority(filePath, strat),
   });
 
   // 5. Guard: empty sample

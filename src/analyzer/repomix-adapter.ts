@@ -42,6 +42,8 @@ export async function packCodebase(
     include?: string[];
     exclude?: string[];
     maxTokens?: number;
+    /** Optional priority function: lower return value = higher priority (kept first during truncation). */
+    prioritize?: (filePath: string) => number;
   },
 ): Promise<RepomixResult> {
   // Suppress repomix verbose logging (0 = ERROR level)
@@ -93,13 +95,21 @@ export async function packCodebase(
       );
     }
 
+    // Sort by priority if a prioritize function was provided.
+    // This ensures high-priority files (entry points, config) survive truncation
+    // while low-priority files are dropped first.
     let processedFiles = [...result.processedFiles];
+    if (options.prioritize) {
+      const prio = options.prioritize;
+      processedFiles.sort((a, b) => prio(a.path) - prio(b.path));
+    }
+
     let fileCount = result.totalFiles;
     let tokenCount = result.totalTokens;
 
-    // Token budget truncation: drop files from the end until under budget
+    // Token budget truncation: drop lowest-priority files (end of sorted list)
     if (options.maxTokens && result.totalTokens > options.maxTokens) {
-      const totalChars = result.processedFiles.reduce(
+      const totalChars = processedFiles.reduce(
         (sum, f) => sum + f.content.length,
         0,
       );
