@@ -39,6 +39,15 @@ vi.mock('../baseline.js', () => ({
   copyDir: vi.fn(),
 }));
 
+vi.mock('../architect.js', () => ({
+  proposeArchitecture: vi.fn(),
+}));
+
+vi.mock('../schedule.js', () => ({
+  shouldUseArchitect: vi.fn().mockReturnValue(false),
+  computeArchitectMutationBudget: vi.fn().mockReturnValue(10),
+}));
+
 import { evaluateAll } from '../runner.js';
 import { propose } from '../proposer.js';
 import { applyMutations } from '../mutator.js';
@@ -77,6 +86,9 @@ function makeEvolveConfig(overrides: Partial<EvolveConfig> = {}): EvolveConfig {
     samplingStrategy: 'thompson',
     klLambda: 0,
     pbtBranches: 3,
+    architectEvery: 3,
+    schedule: 'explore-exploit',
+    architectModel: 'claude-sonnet-4-6',
     ...overrides,
   };
 }

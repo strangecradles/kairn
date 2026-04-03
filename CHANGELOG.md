@@ -7,6 +7,27 @@ This project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [2.13.0] — 2026-04-03
+
+### Added
+- **Architect proposer** (`src/evolve/architect.ts`) — exploration-mode proposer with fundamentally different system prompt ("reimagine the structure, not just patch failures"), higher mutation budget (5-10 vs. reactive's 3), and speculative rationale. Interleaved with reactive proposer on a configurable schedule
+- **Staging gate** — architect proposals evaluated on full task suite (no pruning/sampling) in a staging copy before acceptance. Accepts only when staging score >= current best, preventing regressions from bold structural changes
+- **Exploration/exploitation schedule** (`src/evolve/schedule.ts`) — three strategies: `explore-exploit` (architect early + every Nth), `constant` (every Nth), `adaptive` (architect when scores plateau). Configurable via `--schedule` flag
+- **Knowledge base** (`src/evolve/knowledge.ts`) — persistent cross-run pattern storage at `~/.kairn/knowledge/patterns.jsonl`. Both proposer and architect load patterns before proposing. Accepted mutations extracted and saved after each evolve run
+- **Cross-repo research protocol** (`src/evolve/research.ts`) — `kairn evolve research --repos <urls>` clones N repos, runs evolve on each, identifies convergent mutation patterns across repos. Convergence analysis classifies patterns as universal, language-specific, or failed
+- **CLI flags** — `--architect-every <n>`, `--schedule <type>`, `--architect-model <model>` on `kairn evolve run`; `kairn evolve research` subcommand with `--repos`, `--iterations`, `--threshold`, `--output`
+- **Report mode column** — evolution reports now show architect vs. reactive mode for each iteration, with dedicated "Architect Iterations" summary section
+- 130 new tests (1336 total, up from 1207)
+
+### Changed
+- `EvolveConfig` extended with `architectEvery`, `schedule`, `architectModel` fields
+- `IterationLog` extended with `source?: 'reactive' | 'architect'` for mode tracking
+- `LoopProgressEvent` extended with architect event types
+- `EvolutionReport` iterations include `mode` field
+- Proposer and architect both read knowledge base before generating proposals
+
+---
+
 ## [2.12.0] — 2026-04-03
 
 ### Added

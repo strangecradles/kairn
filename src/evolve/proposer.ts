@@ -415,7 +415,19 @@ export async function propose(
   const { loadProposerMemory, formatMemoryForProposer } = await import('./memory.js');
   const memory = await loadProposerMemory(workspacePath);
   const memorySection = formatMemoryForProposer(memory);
-  const userMessage = buildProposerUserMessage(harnessFiles, traces, tasks, history, memorySection);
+
+  // Load knowledge base for cross-run learning
+  let knowledgeSection = '';
+  try {
+    const { loadKnowledgeBase, formatKnowledgeForProposer } = await import('./knowledge.js');
+    const patterns = await loadKnowledgeBase();
+    knowledgeSection = formatKnowledgeForProposer(patterns, null);
+  } catch {
+    // Knowledge base is non-critical — continue without it
+  }
+
+  const combinedMemory = memorySection + (knowledgeSection ? '\n' + knowledgeSection : '');
+  const userMessage = buildProposerUserMessage(harnessFiles, traces, tasks, history, combinedMemory || undefined);
 
   // Override model with proposer-specific model
   const proposerConfig: KairnConfig = { ...config, model: proposerModel };

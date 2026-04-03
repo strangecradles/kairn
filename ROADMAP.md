@@ -485,28 +485,28 @@ Full plan: [`PLAN-v2.7.0.md`](PLAN-v2.7.0.md)
 > The proposer is gradient descent with a tiny learning rate — it fixes what's broken but can't imagine what's possible. The Principal-as-Architect adds an exploration mode that proposes structural improvements, not just reactive patches. Combined with a cross-repo research protocol, this closes the feedback loop between evolve discoveries and generation templates.
 
 **Architect Proposer (exploration mode):**
-- [ ] New system prompt: "You are an agent environment ARCHITECT. Reimagine the harness structure, not just patch failures."
-- [ ] Higher mutation budget (5-10 per call vs. proposer's 3)
-- [ ] Runs every Nth iteration (configurable, default: every 5th) — interleaved with reactive proposer
-- [ ] Separate scoring: architect proposals evaluated on full task suite before acceptance
-- [ ] Rollback protection: architect proposals held in staging until they prove ≥ current best
+- [x] New system prompt: "You are an agent environment ARCHITECT. Reimagine the harness structure, not just patch failures."
+- [x] Higher mutation budget (5-10 per call vs. proposer's 3)
+- [x] Runs every Nth iteration (configurable, default: every 5th) — interleaved with reactive proposer
+- [x] Separate scoring: architect proposals evaluated on full task suite before acceptance
+- [x] Rollback protection: architect proposals held in staging until they prove ≥ current best
 
 **Cross-repo research protocol:**
-- [ ] `kairn evolve research` command — clone N GitHub repos, run evolve on each, catalog convergent mutations
-- [ ] Convergence analyzer: identify mutations that appear in ≥M/N repos (stable patterns)
-- [ ] Research report: which patterns improve scores universally vs. project-specifically
-- [ ] Feed convergent patterns back into generation templates (closing the loop)
+- [x] `kairn evolve research` command — clone N GitHub repos, run evolve on each, catalog convergent mutations
+- [x] Convergence analyzer: identify mutations that appear in ≥M/N repos (stable patterns)
+- [x] Research report: which patterns improve scores universally vs. project-specifically
+- [x] Feed convergent patterns back into generation templates (closing the loop)
 
 **Cross-pollination knowledge base:**
-- [ ] Persist high-scoring patterns across evolve runs in `~/.kairn/knowledge/`
-- [ ] Proposer + architect read knowledge base before proposing (experience replay, cross-repo)
-- [ ] Patterns tagged by project type (Python, Node, Docker, monorepo, etc.)
+- [x] Persist high-scoring patterns across evolve runs in `~/.kairn/knowledge/`
+- [x] Proposer + architect read knowledge base before proposing (experience replay, cross-repo)
+- [x] Patterns tagged by project type (Python, Node, Docker, monorepo, etc.)
 
 **Exploration/exploitation schedule:**
-- [ ] Early iterations: architect mode (high mutation budget, bold structural changes)
-- [ ] Middle iterations: reactive proposer (targeted fixes, trace-grounded)
-- [ ] Late iterations: conservative refinement (1-2 mutations, full eval sweep)
-- [ ] Configurable schedule: `--schedule explore-exploit` or `--schedule constant`
+- [x] Early iterations: architect mode (high mutation budget, bold structural changes)
+- [x] Middle iterations: reactive proposer (targeted fixes, trace-grounded)
+- [x] Late iterations: conservative refinement (1-2 mutations, full eval sweep)
+- [x] Configurable schedule: `--schedule explore-exploit` or `--schedule constant`
 
 ### v2.14.0 — Polish & Integration
 - [ ] `kairn evolve watch` — live dashboard during evolution (progress, scores, current mutation)
