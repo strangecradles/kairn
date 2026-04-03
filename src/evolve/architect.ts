@@ -7,8 +7,9 @@
  */
 
 import { callLLM } from '../llm.js';
-import { readHarnessFiles, parseProposerResponse } from './proposer.js';
+import { readHarnessFiles, parseProposerResponse, formatAnalysisForProposer } from './proposer.js';
 import { loadIterationTraces } from './trace.js';
+import type { ProjectContext } from './proposer.js';
 import type { Task, Trace, IterationLog, ArchitectProposal } from './types.js';
 import type { KairnConfig } from '../types.js';
 
@@ -237,12 +238,25 @@ function buildHistorySection(history: IterationLog[], budget: number): string {
  * Build the user-facing prompt for the architect LLM call.
  *
  * Assembles current harness files, task definitions, evolution summary,
- * what's-working analysis, optional knowledge context, traces, and history
+ * what's-working analysis, optional project context (analysis, IR summary,
+ * key source files), optional knowledge context, traces, and history
  * into a single context string with priority-based truncation.
+ *
+ * When projectContext is provided, a "## Project Understanding" section is
+ * inserted in the fixed (never-truncated) portion after harness files and
+ * evolution summary, before traces, giving the architect visibility into
+ * the project being optimized.
  *
  * The architect uses a 50/50 trace/history budget split (vs. the reactive
  * proposer's 70/30) because structural analysis benefits more from history
  * context than individual trace details.
+ *
+ * @param harnessFiles - Current harness file contents (path -> content)
+ * @param traces - Execution traces from the current iteration
+ * @param tasks - Task definitions (descriptions only, no rubrics)
+ * @param history - Logs from previous iterations
+ * @param knowledgeContext - Optional formatted knowledge base context string
+ * @param projectContext - Optional project analysis, IR summary, and key source files
  */
 export function buildArchitectUserMessage(
   harnessFiles: Record<string, string>,
@@ -250,6 +264,7 @@ export function buildArchitectUserMessage(
   tasks: Task[],
   history: IterationLog[],
   knowledgeContext?: string,
+  projectContext?: ProjectContext,
 ): string {
   // Section 1: Current harness files (highest priority — never truncated)
   const harnessSection: string[] = ['## Current Harness Files\n'];
@@ -282,6 +297,27 @@ export function buildArchitectUserMessage(
   // Section 4: What's Working (unique to architect)
   const workingSection = buildWhatsWorking(history, tasks);
 
+  // Section 4b: Project Understanding (when project context is available)
+  // Inserted in the fixed (never-truncated) section, after harness + tasks
+  // and before traces, giving the architect visibility into the project.
+  let projectSection = '';
+  if (projectContext) {
+    const parts: string[] = ['## Project Understanding\n'];
+    parts.push('### Analysis Summary');
+    parts.push(formatAnalysisForProposer(projectContext.analysis));
+    parts.push('');
+    parts.push('### Harness Structure');
+    parts.push(projectContext.irSummary);
+    if (projectContext.keySourceFiles) {
+      parts.push('');
+      parts.push('### Key Source Files');
+      parts.push('```');
+      parts.push(projectContext.keySourceFiles);
+      parts.push('```');
+    }
+    projectSection = '\n' + parts.join('\n') + '\n';
+  }
+
   // Section 5: Knowledge Base (if provided)
   const knowledgeSection = knowledgeContext
     ? `## Knowledge Base (patterns from other projects)\n\n${knowledgeContext}\n`
@@ -294,6 +330,7 @@ export function buildArchitectUserMessage(
     (summarySection ? '\n' : '') +
     workingSection +
     (workingSection ? '\n' : '') +
+    projectSection +
     knowledgeSection;
 
   const remainingBudget = MAX_CONTEXT_CHARS - fixedContent.length;
@@ -329,6 +366,7 @@ export function buildArchitectUserMessage(
  * @param config - Kairn configuration (for LLM access)
  * @param architectModel - Model ID to use for the architect call
  * @param knowledgeContext - Optional formatted knowledge base context string
+ * @param projectContext - Optional project context (analysis, IR summary, key source files)
  * @returns A validated ArchitectProposal with structural=true and source='architect'
  */
 export async function proposeArchitecture(
@@ -340,6 +378,7 @@ export async function proposeArchitecture(
   config: KairnConfig,
   architectModel: string,
   knowledgeContext?: string,
+  projectContext?: ProjectContext,
 ): Promise<ArchitectProposal> {
   const harnessFiles = await readHarnessFiles(harnessPath);
   const traces = await loadIterationTraces(workspacePath, iteration);
@@ -362,6 +401,7 @@ export async function proposeArchitecture(
     tasks,
     history,
     effectiveKnowledge,
+    projectContext,
   );
 
   const architectConfig: KairnConfig = { ...config, model: architectModel };

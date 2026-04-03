@@ -3,6 +3,8 @@ import fs from 'fs/promises';
 import path from 'path';
 import type { Task, Trace, IterationLog, Score, ArchitectProposal } from '../types.js';
 import type { KairnConfig } from '../../types.js';
+import type { ProjectContext } from '../proposer.js';
+import type { ProjectAnalysis } from '../../analyzer/types.js';
 
 // ─── Test helpers ───────────────────────────────────────────────────────────
 
@@ -55,6 +57,45 @@ function makeIterationLog(overrides: Partial<IterationLog> = {}): IterationLog {
     proposal: null,
     diffPatch: null,
     timestamp: '2026-01-01T00:00:00.000Z',
+    ...overrides,
+  };
+}
+
+function makeProjectAnalysis(): ProjectAnalysis {
+  return {
+    purpose: 'CLI tool for compiling agent environments',
+    domain: 'developer-tools',
+    key_modules: [
+      {
+        name: 'compiler',
+        path: 'src/compiler/',
+        description: 'Compiles intent into harness files',
+        responsibilities: ['intent parsing', 'LLM dispatch'],
+      },
+    ],
+    workflows: [
+      {
+        name: 'optimize',
+        description: 'Compile and deploy environment',
+        trigger: 'kairn optimize',
+        steps: ['analyze', 'compile', 'write'],
+      },
+    ],
+    architecture_style: 'modular CLI',
+    deployment_model: 'local npm package',
+    dataflow: [{ from: 'analyzer', to: 'compiler', data: 'ProjectAnalysis' }],
+    config_keys: [{ name: 'API_KEY', purpose: 'LLM authentication' }],
+    sampled_files: ['src/cli.ts', 'src/compiler/compile.ts'],
+    content_hash: 'abc123',
+    analyzed_at: '2026-01-01T00:00:00.000Z',
+  };
+}
+
+function makeProjectContext(overrides: Partial<ProjectContext> = {}): ProjectContext {
+  return {
+    analysis: makeProjectAnalysis(),
+    irSummary: 'Sections (3): purpose, tech-stack, commands\nCommands (2): build, test',
+    keySourceFiles: '// src/cli.ts\nconsole.log("hello");',
     ...overrides,
   };
 }
@@ -198,6 +239,135 @@ describe('buildArchitectUserMessage', () => {
     const message = buildArchitectUserMessage({}, traces, [makeTask()], [], undefined);
 
     expect(message).toContain('traced-task');
+  });
+
+  it('includes "Project Understanding" section when projectContext is provided', async () => {
+    const { buildArchitectUserMessage } = await import('../architect.js');
+
+    const ctx = makeProjectContext();
+    const message = buildArchitectUserMessage(
+      { 'CLAUDE.md': '# Test' },
+      [],
+      [makeTask()],
+      [],
+      undefined,
+      ctx,
+    );
+
+    expect(message).toContain('## Project Understanding');
+  });
+
+  it('does NOT include "Project Understanding" when projectContext is omitted', async () => {
+    const { buildArchitectUserMessage } = await import('../architect.js');
+
+    const message = buildArchitectUserMessage(
+      { 'CLAUDE.md': '# Test' },
+      [],
+      [makeTask()],
+      [],
+      undefined,
+    );
+
+    expect(message).not.toContain('## Project Understanding');
+  });
+
+  it('includes analysis summary in project context section', async () => {
+    const { buildArchitectUserMessage } = await import('../architect.js');
+
+    const ctx = makeProjectContext();
+    const message = buildArchitectUserMessage(
+      {},
+      [],
+      [makeTask()],
+      [],
+      undefined,
+      ctx,
+    );
+
+    expect(message).toContain('### Analysis Summary');
+    expect(message).toContain('CLI tool for compiling agent environments');
+    expect(message).toContain('developer-tools');
+    expect(message).toContain('compiler');
+  });
+
+  it('includes IR summary in project context section', async () => {
+    const { buildArchitectUserMessage } = await import('../architect.js');
+
+    const ctx = makeProjectContext({
+      irSummary: 'Sections (5): purpose, tech-stack, architecture, commands, verification',
+    });
+    const message = buildArchitectUserMessage(
+      {},
+      [],
+      [makeTask()],
+      [],
+      undefined,
+      ctx,
+    );
+
+    expect(message).toContain('### Harness Structure');
+    expect(message).toContain('Sections (5): purpose, tech-stack, architecture, commands, verification');
+  });
+
+  it('includes key source files in project context section', async () => {
+    const { buildArchitectUserMessage } = await import('../architect.js');
+
+    const ctx = makeProjectContext({
+      keySourceFiles: '// main.ts\nexport function main() {}',
+    });
+    const message = buildArchitectUserMessage(
+      {},
+      [],
+      [makeTask()],
+      [],
+      undefined,
+      ctx,
+    );
+
+    expect(message).toContain('### Key Source Files');
+    expect(message).toContain('export function main() {}');
+  });
+
+  it('omits key source files subsection when keySourceFiles is undefined', async () => {
+    const { buildArchitectUserMessage } = await import('../architect.js');
+
+    const ctx = makeProjectContext({ keySourceFiles: undefined });
+    const message = buildArchitectUserMessage(
+      {},
+      [],
+      [makeTask()],
+      [],
+      undefined,
+      ctx,
+    );
+
+    expect(message).toContain('## Project Understanding');
+    expect(message).toContain('### Analysis Summary');
+    expect(message).toContain('### Harness Structure');
+    expect(message).not.toContain('### Key Source Files');
+  });
+
+  it('places project context AFTER harness files and BEFORE traces', async () => {
+    const { buildArchitectUserMessage } = await import('../architect.js');
+
+    const ctx = makeProjectContext();
+    const traces = [makeTrace({ taskId: 'trace-order-test' })];
+    const message = buildArchitectUserMessage(
+      { 'CLAUDE.md': '# Harness' },
+      traces,
+      [makeTask()],
+      [],
+      undefined,
+      ctx,
+    );
+
+    const harnessIdx = message.indexOf('## Current Harness Files');
+    const projectIdx = message.indexOf('## Project Understanding');
+    const traceIdx = message.indexOf('## Execution Traces');
+
+    expect(harnessIdx).toBeGreaterThanOrEqual(0);
+    expect(projectIdx).toBeGreaterThan(harnessIdx);
+    expect(traceIdx).toBeGreaterThan(projectIdx);
   });
 });
 
@@ -536,5 +706,72 @@ describe('proposeArchitecture', () => {
         undefined,
       ),
     ).rejects.toThrow('API rate limit exceeded');
+  });
+
+  it('passes projectContext through to the user message', async () => {
+    const { proposeArchitecture } = await import('../architect.js');
+
+    const harnessPath = path.join(tempDir, 'harness');
+    await fs.mkdir(harnessPath, { recursive: true });
+    await fs.writeFile(path.join(harnessPath, 'CLAUDE.md'), '# Harness');
+
+    mockedLoadIterationTraces.mockResolvedValue([]);
+    mockedCallLLM.mockResolvedValue(JSON.stringify({
+      reasoning: 'Used project context for architecture decisions.',
+      mutations: [],
+      expected_impact: {},
+    }));
+
+    const ctx = makeProjectContext();
+
+    await proposeArchitecture(
+      5,
+      path.join(tempDir, 'workspace'),
+      harnessPath,
+      [],
+      [makeTask()],
+      makeConfig(),
+      'claude-opus-4-6',
+      undefined,
+      ctx,
+    );
+
+    const calledUserMessage = mockedCallLLM.mock.calls[0][1] as string;
+    expect(calledUserMessage).toContain('## Project Understanding');
+    expect(calledUserMessage).toContain('### Analysis Summary');
+    expect(calledUserMessage).toContain('CLI tool for compiling agent environments');
+    expect(calledUserMessage).toContain('### Harness Structure');
+    expect(calledUserMessage).toContain('Sections (3): purpose, tech-stack, commands');
+    expect(calledUserMessage).toContain('### Key Source Files');
+  });
+
+  it('does not include project context in user message when projectContext is omitted', async () => {
+    const { proposeArchitecture } = await import('../architect.js');
+
+    const harnessPath = path.join(tempDir, 'harness');
+    await fs.mkdir(harnessPath, { recursive: true });
+    await fs.writeFile(path.join(harnessPath, 'CLAUDE.md'), '# Harness');
+
+    mockedLoadIterationTraces.mockResolvedValue([]);
+    mockedCallLLM.mockResolvedValue(JSON.stringify({
+      reasoning: 'No changes.',
+      mutations: [],
+      expected_impact: {},
+    }));
+
+    await proposeArchitecture(
+      5,
+      path.join(tempDir, 'workspace'),
+      harnessPath,
+      [],
+      [makeTask()],
+      makeConfig(),
+      'claude-opus-4-6',
+      undefined,
+      undefined,
+    );
+
+    const calledUserMessage = mockedCallLLM.mock.calls[0][1] as string;
+    expect(calledUserMessage).not.toContain('## Project Understanding');
   });
 });

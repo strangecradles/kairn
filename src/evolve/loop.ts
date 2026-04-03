@@ -524,6 +524,10 @@ export async function evolve(
 
       let architectProposal;
       try {
+        // Build project context for the architect's structural analysis
+        const architectProjectCtx = projectData
+          ? await buildProjectContext(projectData, harnessPath)
+          : undefined;
         architectProposal = await proposeArchitecture(
           iter,
           workspacePath,
@@ -532,6 +536,8 @@ export async function evolve(
           tasks,
           kairnConfig,
           evolveConfig.architectModel,
+          undefined,
+          architectProjectCtx,
         );
         // Enforce architect mutation budget
         const architectCap = computeArchitectMutationBudget(iter, evolveConfig.maxIterations);
