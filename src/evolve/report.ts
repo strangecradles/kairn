@@ -8,6 +8,8 @@ import type {
   TasksFile,
   Score,
   EvolutionReport,
+  CategoryBreakdown,
+  TemplateCategory,
 } from './types.js';
 import { parse as yamlParse } from 'yaml';
 
@@ -46,15 +48,59 @@ async function loadAllIterations(workspacePath: string): Promise<IterationLog[]>
 
 /**
  * Load tasks from tasks.yaml in the workspace.
+ * Tasks without a `category` field default to `'harness-sensitivity'` for backward compatibility.
  */
 async function loadTasks(workspacePath: string): Promise<Task[]> {
   try {
     const content = await fs.readFile(path.join(workspacePath, 'tasks.yaml'), 'utf-8');
     const parsed = yamlParse(content) as TasksFile;
-    return parsed?.tasks ?? [];
+    const tasks = parsed?.tasks ?? [];
+    return tasks.map(t => ({
+      ...t,
+      category: t.category ?? 'harness-sensitivity',
+    }));
   } catch {
     return [];
   }
+}
+
+/**
+ * Compute per-category score breakdown from the best iteration's task results.
+ * Returns undefined if all tasks belong to a single category (no meaningful breakdown).
+ */
+function computeCategoryBreakdown(
+  tasks: Task[],
+  taskResults: Record<string, Score>,
+): CategoryBreakdown | undefined {
+  const harnessTasks: number[] = [];
+  const substantiveTasks: number[] = [];
+
+  for (const task of tasks) {
+    const result = taskResults[task.id];
+    if (!result) continue;
+
+    const score = numericScore(result);
+    const category: TemplateCategory = task.category ?? 'harness-sensitivity';
+
+    if (category === 'harness-sensitivity') {
+      harnessTasks.push(score);
+    } else {
+      substantiveTasks.push(score);
+    }
+  }
+
+  // Only show breakdown when there are tasks in both categories
+  if (harnessTasks.length === 0 || substantiveTasks.length === 0) {
+    return undefined;
+  }
+
+  const harnessAvg = harnessTasks.reduce((a, b) => a + b, 0) / harnessTasks.length;
+  const substantiveAvg = substantiveTasks.reduce((a, b) => a + b, 0) / substantiveTasks.length;
+
+  return {
+    harnessAdherence: { score: harnessAvg, count: harnessTasks.length },
+    substantiveTasks: { score: substantiveAvg, count: substantiveTasks.length },
+  };
 }
 
 /**
@@ -141,6 +187,14 @@ export async function generateMarkdownReport(workspacePath: string): Promise<str
   lines.push(`| Best score | ${bestIter.score.toFixed(1)}% |`);
   lines.push(`| Best iteration | ${bestIter.iteration} |`);
   lines.push(`| Improvement | ${improvement >= 0 ? '+' : ''}${improvement.toFixed(1)} points |`);
+
+  // Category breakdown at best iteration
+  const categoryBreakdown = computeCategoryBreakdown(tasks, bestIter.taskResults);
+  if (categoryBreakdown) {
+    lines.push(`| Harness adherence | ${categoryBreakdown.harnessAdherence.score.toFixed(1)}% (${categoryBreakdown.harnessAdherence.count} tasks) |`);
+    lines.push(`| Substantive tasks | ${categoryBreakdown.substantiveTasks.score.toFixed(1)}% (${categoryBreakdown.substantiveTasks.count} tasks) |`);
+  }
+
   lines.push('');
 
   // Iteration summary table
@@ -248,13 +302,19 @@ export async function generateJsonReport(workspacePath: string): Promise<Evoluti
   const tasks = await loadTasks(workspacePath);
 
   const baselineScore = iterations.length > 0 ? iterations[0].score : 0;
-  const bestIter = iterations.length > 0
+  const bestIterLog = iterations.length > 0
     ? iterations.reduce((best, curr) => curr.score > best.score ? curr : best, iterations[0])
-    : { score: 0, iteration: 0 };
+    : undefined;
+  const bestIter = bestIterLog ?? { score: 0, iteration: 0 };
   const improvement = bestIter.score - baselineScore;
 
   const counterfactuals = diagnoseCounterfactuals(iterations, tasks);
   const leaderboard = buildLeaderboard(iterations, tasks);
+
+  // Compute category breakdown at best iteration
+  const categoryBreakdown = bestIterLog
+    ? computeCategoryBreakdown(tasks, bestIterLog.taskResults)
+    : undefined;
 
   return {
     overview: {
@@ -264,6 +324,7 @@ export async function generateJsonReport(workspacePath: string): Promise<Evoluti
       bestScore: bestIter.score,
       bestIteration: bestIter.iteration,
       improvement,
+      ...(categoryBreakdown ? { categoryBreakdown } : {}),
     },
     iterations: iterations.map(iter => {
       const stddevs = Object.values(iter.taskResults)

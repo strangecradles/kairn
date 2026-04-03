@@ -241,6 +241,18 @@ export interface CounterfactualReport {
   entries: CounterfactualEntry[];
 }
 
+/** Per-category score aggregate for evolution reports. */
+export interface CategoryScoreAggregate {
+  score: number;
+  count: number;
+}
+
+/** Breakdown of scores by task category (harness-sensitivity vs. substantive). */
+export interface CategoryBreakdown {
+  harnessAdherence: CategoryScoreAggregate;
+  substantiveTasks: CategoryScoreAggregate;
+}
+
 // Machine-readable evolution report
 export interface EvolutionReport {
   overview: {
@@ -250,6 +262,7 @@ export interface EvolutionReport {
     bestScore: number;
     bestIteration: number;
     improvement: number;
+    categoryBreakdown?: CategoryBreakdown;
   };
   iterations: Array<{
     iteration: number;

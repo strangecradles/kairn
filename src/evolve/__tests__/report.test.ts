@@ -36,7 +36,7 @@ async function createWorkspace(opts: {
     };
     source?: 'reactive' | 'architect';
   }>;
-  tasks: Array<{ id: string; template: string; description: string }>;
+  tasks: Array<{ id: string; template: string; description: string; category?: 'harness-sensitivity' | 'substantive' }>;
 }): Promise<string> {
   const workspace = path.join(tempDir, '.kairn-evolve');
 
@@ -51,6 +51,7 @@ async function createWorkspace(opts: {
       expected_outcome: 'outcome',
       scoring: 'pass-fail',
       timeout: 60,
+      ...(t.category ? { category: t.category } : {}),
     })),
   };
   await fs.writeFile(
@@ -506,5 +507,247 @@ describe('generateJsonReport with mode field', () => {
 
     const report = await generateJsonReport(workspace);
     expect(report.iterations[0].mode).toBe('reactive');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Category breakdown in reports
+// ---------------------------------------------------------------------------
+
+describe('generateMarkdownReport with category breakdown', () => {
+  it('shows separate scores when tasks have mixed categories', async () => {
+    const workspace = await createWorkspace({
+      iterations: [
+        {
+          iteration: 0,
+          score: 72.5,
+          taskResults: {
+            'harness-1': { pass: true, score: 80 },
+            'harness-2': { pass: true, score: 90 },
+            'substantive-1': { pass: false, score: 50 },
+            'substantive-2': { pass: true, score: 70 },
+          },
+        },
+      ],
+      tasks: [
+        { id: 'harness-1', template: 'convention-adherence', description: 'Harness 1', category: 'harness-sensitivity' },
+        { id: 'harness-2', template: 'rule-compliance', description: 'Harness 2', category: 'harness-sensitivity' },
+        { id: 'substantive-1', template: 'real-bug-fix', description: 'Substantive 1', category: 'substantive' },
+        { id: 'substantive-2', template: 'real-feature-add', description: 'Substantive 2', category: 'substantive' },
+      ],
+    });
+
+    const md = await generateMarkdownReport(workspace);
+
+    expect(md).toContain('Harness adherence');
+    expect(md).toContain('Substantive tasks');
+    // Check it reports counts
+    expect(md).toContain('2 tasks');
+  });
+
+  it('shows only overall score when all tasks are one category', async () => {
+    const workspace = await createWorkspace({
+      iterations: [
+        {
+          iteration: 0,
+          score: 80,
+          taskResults: {
+            'task-1': { pass: true, score: 80 },
+            'task-2': { pass: true, score: 80 },
+          },
+        },
+      ],
+      tasks: [
+        { id: 'task-1', template: 'convention-adherence', description: 'Task 1', category: 'harness-sensitivity' },
+        { id: 'task-2', template: 'rule-compliance', description: 'Task 2', category: 'harness-sensitivity' },
+      ],
+    });
+
+    const md = await generateMarkdownReport(workspace);
+
+    expect(md).not.toContain('Harness adherence');
+    expect(md).not.toContain('Substantive tasks');
+  });
+
+  it('defaults tasks without category to harness-sensitivity', async () => {
+    const workspace = await createWorkspace({
+      iterations: [
+        {
+          iteration: 0,
+          score: 75,
+          taskResults: {
+            'no-category': { pass: true, score: 80 },
+            'substantive-1': { pass: false, score: 70 },
+          },
+        },
+      ],
+      tasks: [
+        { id: 'no-category', template: 'add-feature', description: 'No category set' },
+        { id: 'substantive-1', template: 'real-bug-fix', description: 'Substantive', category: 'substantive' },
+      ],
+    });
+
+    const md = await generateMarkdownReport(workspace);
+
+    // Should show breakdown because there are two categories
+    expect(md).toContain('Harness adherence');
+    expect(md).toContain('Substantive tasks');
+    // The no-category task defaults to harness-sensitivity (80%), substantive is 70%
+    expect(md).toContain('80.0% (1 tasks)');
+    expect(md).toContain('70.0% (1 tasks)');
+  });
+
+  it('shows category breakdown at the best iteration', async () => {
+    const workspace = await createWorkspace({
+      iterations: [
+        {
+          iteration: 0,
+          score: 50,
+          taskResults: {
+            'h1': { pass: false, score: 40 },
+            's1': { pass: false, score: 60 },
+          },
+        },
+        {
+          iteration: 1,
+          score: 75,
+          taskResults: {
+            'h1': { pass: true, score: 90 },
+            's1': { pass: false, score: 60 },
+          },
+        },
+      ],
+      tasks: [
+        { id: 'h1', template: 'convention-adherence', description: 'Harness', category: 'harness-sensitivity' },
+        { id: 's1', template: 'real-bug-fix', description: 'Substantive', category: 'substantive' },
+      ],
+    });
+
+    const md = await generateMarkdownReport(workspace);
+
+    // At best iteration (1): harness = 90%, substantive = 60%
+    expect(md).toContain('90.0%');
+    expect(md).toContain('60.0%');
+    expect(md).toContain('Harness adherence');
+    expect(md).toContain('Substantive tasks');
+  });
+});
+
+describe('generateJsonReport with category breakdown', () => {
+  it('includes categoryBreakdown in overview when mixed categories', async () => {
+    const workspace = await createWorkspace({
+      iterations: [
+        {
+          iteration: 0,
+          score: 72.5,
+          taskResults: {
+            'h1': { pass: true, score: 80 },
+            'h2': { pass: true, score: 90 },
+            's1': { pass: false, score: 50 },
+            's2': { pass: true, score: 70 },
+          },
+        },
+      ],
+      tasks: [
+        { id: 'h1', template: 'convention-adherence', description: 'H1', category: 'harness-sensitivity' },
+        { id: 'h2', template: 'rule-compliance', description: 'H2', category: 'harness-sensitivity' },
+        { id: 's1', template: 'real-bug-fix', description: 'S1', category: 'substantive' },
+        { id: 's2', template: 'real-feature-add', description: 'S2', category: 'substantive' },
+      ],
+    });
+
+    const report = await generateJsonReport(workspace);
+
+    expect(report.overview.categoryBreakdown).toBeDefined();
+    expect(report.overview.categoryBreakdown!.harnessAdherence).toEqual({
+      score: 85,
+      count: 2,
+    });
+    expect(report.overview.categoryBreakdown!.substantiveTasks).toEqual({
+      score: 60,
+      count: 2,
+    });
+  });
+
+  it('omits categoryBreakdown when all tasks are one category', async () => {
+    const workspace = await createWorkspace({
+      iterations: [
+        {
+          iteration: 0,
+          score: 80,
+          taskResults: {
+            'h1': { pass: true, score: 80 },
+          },
+        },
+      ],
+      tasks: [
+        { id: 'h1', template: 'convention-adherence', description: 'H1', category: 'harness-sensitivity' },
+      ],
+    });
+
+    const report = await generateJsonReport(workspace);
+
+    expect(report.overview.categoryBreakdown).toBeUndefined();
+  });
+
+  it('defaults tasks without category to harness-sensitivity in JSON', async () => {
+    const workspace = await createWorkspace({
+      iterations: [
+        {
+          iteration: 0,
+          score: 75,
+          taskResults: {
+            'no-cat': { pass: true, score: 80 },
+            's1': { pass: false, score: 70 },
+          },
+        },
+      ],
+      tasks: [
+        { id: 'no-cat', template: 'add-feature', description: 'No cat' },
+        { id: 's1', template: 'real-bug-fix', description: 'S1', category: 'substantive' },
+      ],
+    });
+
+    const report = await generateJsonReport(workspace);
+
+    expect(report.overview.categoryBreakdown).toBeDefined();
+    expect(report.overview.categoryBreakdown!.harnessAdherence.count).toBe(1);
+    expect(report.overview.categoryBreakdown!.harnessAdherence.score).toBe(80);
+    expect(report.overview.categoryBreakdown!.substantiveTasks.count).toBe(1);
+    expect(report.overview.categoryBreakdown!.substantiveTasks.score).toBe(70);
+  });
+
+  it('computes category scores at best iteration', async () => {
+    const workspace = await createWorkspace({
+      iterations: [
+        {
+          iteration: 0,
+          score: 50,
+          taskResults: {
+            'h1': { pass: false, score: 40 },
+            's1': { pass: false, score: 60 },
+          },
+        },
+        {
+          iteration: 1,
+          score: 75,
+          taskResults: {
+            'h1': { pass: true, score: 90 },
+            's1': { pass: false, score: 60 },
+          },
+        },
+      ],
+      tasks: [
+        { id: 'h1', template: 'convention-adherence', description: 'H', category: 'harness-sensitivity' },
+        { id: 's1', template: 'real-bug-fix', description: 'S', category: 'substantive' },
+      ],
+    });
+
+    const report = await generateJsonReport(workspace);
+
+    // Best iteration is 1 (score: 75)
+    expect(report.overview.categoryBreakdown).toBeDefined();
+    expect(report.overview.categoryBreakdown!.harnessAdherence.score).toBe(90);
+    expect(report.overview.categoryBreakdown!.substantiveTasks.score).toBe(60);
   });
 });
