@@ -134,6 +134,17 @@ export function estimateTime(model: string, intent: string): string {
   return `~${formatTime(totalBase)}`;
 }
 
+/** Braille spinner frames for smooth animation (10 frames at 100ms = 1s cycle). */
+const SPINNER_FRAMES = ['\u280B', '\u2819', '\u2839', '\u2838', '\u283C', '\u2834', '\u2826', '\u2827', '\u2807', '\u280F'];
+
+/**
+ * Create a progress renderer for compilation output.
+ *
+ * Features:
+ * - Animated braille spinner (cycles at 100ms)
+ * - Per-phase elapsed timer
+ * - Cumulative total timer rendered above all phase lines
+ */
 export function createProgressRenderer(): {
   update: (progress: CompileProgress) => void;
   finish: () => void;
@@ -142,28 +153,39 @@ export function createProgressRenderer(): {
   const lines: string[] = [];
   let intervalId: NodeJS.Timeout | null = null;
   let currentPhase = '';
+  let currentMessage = '';
   let phaseStart = Date.now();
+  const totalStart = Date.now();
   let lineCount = 0; // tracks how many lines have been written to stdout
+  let spinnerIndex = 0;
 
   function render(): void {
     // Move cursor up to overwrite previous output
     if (lineCount > 0) {
       process.stdout.write(`\x1B[${lineCount}A`);
     }
-    for (const line of lines) {
+    // Render cumulative timer as first line, then phase lines
+    const totalElapsed = Math.floor((Date.now() - totalStart) / 1000);
+    const timerLine = `  ${chalk.dim(`Total: ${formatTime(totalElapsed)}`)}`;
+    const allLines = [timerLine, ...lines];
+    for (const line of allLines) {
       process.stdout.write('\x1B[2K' + line + '\n');
     }
-    lineCount = lines.length;
+    lineCount = allLines.length;
   }
 
   function updateElapsed(): void {
-    if (!currentPhase) return;
+    spinnerIndex = (spinnerIndex + 1) % SPINNER_FRAMES.length;
+    if (!currentPhase) {
+      render();
+      return;
+    }
     const elapsed = Math.floor((Date.now() - phaseStart) / 1000);
     const lastIdx = lines.length - 1;
-    if (lastIdx >= 0) {
-      lines[lastIdx] = lines[lastIdx].replace(/\[\d+s\]/, `[${elapsed}s]`);
-      render();
+    if (lastIdx >= 0 && currentMessage) {
+      lines[lastIdx] = `  ${warmStone(SPINNER_FRAMES[spinnerIndex])} ${currentMessage} ${chalk.dim(`[${elapsed}s]`)}`;
     }
+    render();
   }
 
   return {
@@ -171,35 +193,41 @@ export function createProgressRenderer(): {
       if (progress.status === 'running') {
         currentPhase = progress.phase;
         phaseStart = Date.now();
-        lines.push(`  ${warmStone("◐")} ${progress.message} ${chalk.dim("[0s]")}`);
+        currentMessage = progress.message;
+        lines.push(`  ${warmStone(SPINNER_FRAMES[spinnerIndex])} ${progress.message} ${chalk.dim("[0s]")}`);
         if (!intervalId) {
-          intervalId = setInterval(updateElapsed, 1000);
+          intervalId = setInterval(updateElapsed, 100);
         }
       } else if (progress.status === 'success') {
         const lastIdx = lines.length - 1;
-        const elapsed = progress.elapsed != null ? ` ${chalk.dim("—")} ${chalk.dim(Math.floor(progress.elapsed) + "s")}` : '';
+        const elapsed = progress.elapsed != null ? ` ${chalk.dim("\u2014")} ${chalk.dim(Math.floor(progress.elapsed) + "s")}` : '';
         const detail = progress.detail ? ` ${chalk.dim("(" + progress.detail + ")")}` : '';
         if (lastIdx >= 0) {
-          lines[lastIdx] = `  ${chalk.green("✔")} ${progress.message}${detail}${elapsed}`;
+          lines[lastIdx] = `  ${chalk.green("\u2714")} ${progress.message}${detail}${elapsed}`;
         }
         currentPhase = '';
+        currentMessage = '';
       } else if (progress.status === 'warning') {
         // Show the warning on its own line
-        lines.push(`  ${chalk.yellow("⚠")} ${progress.message}`);
+        lines.push(`  ${chalk.yellow("\u26A0")} ${progress.message}`);
       }
       render();
     },
     finish(): void {
       if (intervalId) clearInterval(intervalId);
+      intervalId = null;
       currentPhase = '';
+      currentMessage = '';
       render();
     },
     fail(err: unknown): void {
       if (intervalId) clearInterval(intervalId);
+      intervalId = null;
       currentPhase = '';
+      currentMessage = '';
       const lastIdx = lines.length - 1;
       if (lastIdx >= 0) {
-        lines[lastIdx] = `  ${chalk.red("✖")} Compilation failed`;
+        lines[lastIdx] = `  ${chalk.red("\u2716")} Compilation failed`;
       }
       render();
     },

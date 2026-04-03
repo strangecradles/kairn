@@ -1,7 +1,6 @@
 import { Command } from "commander";
 import { input, confirm, select } from "@inquirer/prompts";
 import chalk from "chalk";
-import ora from "ora";
 import { loadConfig } from "../config.js";
 import { generateClarifications, compile } from "../compiler/compile.js";
 import { writeEnvironment, summarizeSpec } from "../adapter/claude-code.js";
@@ -12,6 +11,7 @@ import { printFullBanner } from "../logo.js";
 import { collectAndWriteKeys, writeEmptyEnvFile } from "../secrets.js";
 import { autonomyLabel } from "../autonomy.js";
 import type { RuntimeTarget, Clarification, AutonomyLevel } from "../types.js";
+import { detectExistingRepo } from "./detect-existing-repo.js";
 
 export const describeCommand = new Command("describe")
   .description("Describe your workflow and generate a Claude Code environment")
@@ -36,6 +36,27 @@ export const describeCommand = new Command("describe")
         )
       );
       process.exit(1);
+    }
+
+    // 2b. Detect existing repo — redirect to optimize if confirmed
+    const repoSignal = await detectExistingRepo(process.cwd());
+    if (repoSignal) {
+      console.log("");
+      console.log(ui.warn("This looks like an existing project with source code."));
+      console.log(ui.info(`For the best results, use: ${chalk.bold("kairn optimize")}`));
+      console.log(chalk.dim("  (kairn describe is designed for new projects or greenfield descriptions)"));
+      console.log("");
+
+      const redirectToOptimize = await confirm({
+        message: "Run kairn optimize instead?",
+        default: true,
+      });
+
+      if (redirectToOptimize) {
+        const { optimizeCommand } = await import("./optimize.js");
+        await optimizeCommand.parseAsync([], { from: "user" });
+        return;
+      }
     }
 
     // 3. Get intent
@@ -176,7 +197,7 @@ export const describeCommand = new Command("describe")
       );
     } else {
       const hasEnvVars = summary.envSetup.length > 0;
-      const written = await writeEnvironment(spec, targetDir, { hasEnvVars });
+      const written = await writeEnvironment(spec, targetDir);
 
       console.log(ui.section("Files Written"));
       console.log("");

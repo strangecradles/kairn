@@ -1,5 +1,12 @@
-import type { IntentPattern } from './intent/types.js';
 import type { HarnessIR } from './ir/types.js';
+
+/** Legacy intent pattern type — retained for backward compatibility with saved environments. */
+export interface IntentPattern {
+  pattern: string;
+  command: string;
+  description: string;
+  source: 'generated' | 'evolved' | 'learned';
+}
 
 export type LLMProvider =
   | "anthropic"
@@ -49,7 +56,9 @@ export interface EnvironmentSpec {
     agents: Record<string, string>;
     docs: Record<string, string>;
     hooks: Record<string, string>;
+    /** @deprecated Intent routing removed in v2.12. Retained for backward-compatible env loading. */
     intent_patterns: IntentPattern[];
+    /** @deprecated Intent routing removed in v2.12. Retained for backward-compatible env loading. */
     intent_prompt_template: string;
   };
 }

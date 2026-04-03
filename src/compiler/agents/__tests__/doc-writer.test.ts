@@ -293,6 +293,19 @@ describe('DOC_WRITER_SYSTEM_PROMPT', () => {
 
     expect(DOC_WRITER_SYSTEM_PROMPT).toContain('Acceptance Criteria');
   });
+
+  it('instructs to prefer empty content over template filler', async () => {
+    const { DOC_WRITER_SYSTEM_PROMPT } = await import('../doc-writer.js');
+
+    expect(DOC_WRITER_SYSTEM_PROMPT).toContain('empty content string');
+    expect(DOC_WRITER_SYSTEM_PROMPT).toContain('Empty is better than template filler');
+  });
+
+  it('instructs to pre-populate docs with real content when possible', async () => {
+    const { DOC_WRITER_SYSTEM_PROMPT } = await import('../doc-writer.js');
+
+    expect(DOC_WRITER_SYSTEM_PROMPT).toContain('Pre-populate docs with real content');
+  });
 });
 
 // ─── stripCodeFences ───────────────────────────────────────────────────────

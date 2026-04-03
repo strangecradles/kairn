@@ -308,6 +308,7 @@ describe('executePlan', () => {
       phaseId: 'phase-1',
       status: 'start',
       agentCount: 1,
+      detail: 'sections-writer',
     });
     expect(progressEvents[1]).toEqual({
       phaseId: 'phase-1',
@@ -319,6 +320,7 @@ describe('executePlan', () => {
       phaseId: 'phase-2',
       status: 'start',
       agentCount: 2,
+      detail: 'sections-writer, command-writer',
     });
     expect(progressEvents[3]).toEqual({
       phaseId: 'phase-2',
@@ -448,6 +450,38 @@ describe('executePlan', () => {
     expect(ir.sections).toHaveLength(1);
     expect(ir.commands).toHaveLength(1);
     expect(ir.rules).toHaveLength(1);
+  });
+
+  it('includes agent names in start progress detail', async () => {
+    const progressEvents: BatchProgress[] = [];
+
+    const executeAgent: ExecuteAgentFn = async (task) => {
+      if (task.agent === 'sections-writer') {
+        return { agent: 'sections-writer', sections: [] };
+      }
+      return { agent: 'command-writer', commands: [] };
+    };
+
+    const plan = makePlan([
+      {
+        id: 'phase-1',
+        agents: [
+          makeTask('sections-writer'),
+          makeTask('command-writer'),
+        ],
+      },
+    ]);
+
+    await executePlan(plan, executeAgent, 2, (progress) => {
+      progressEvents.push({ ...progress });
+    });
+
+    // The 'start' event should include a detail with agent names
+    const startEvent = progressEvents.find((e) => e.status === 'start');
+    expect(startEvent).toBeDefined();
+    expect(startEvent!.detail).toBeDefined();
+    expect(startEvent!.detail).toContain('sections-writer');
+    expect(startEvent!.detail).toContain('command-writer');
   });
 
   it('propagates non-TruncationError errors without retry', async () => {

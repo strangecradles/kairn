@@ -24,6 +24,8 @@ export interface BatchProgress {
   status: 'start' | 'complete' | 'error';
   agentCount: number;
   completedCount?: number;
+  /** Agent or item names for richer progress display. */
+  detail?: string;
 }
 
 /** A function that executes a single agent task and returns its result. */
@@ -190,10 +192,12 @@ export async function executePlan(
       }
     }
 
+    const agentNames = phase.agents.map((a) => a.agent).join(', ');
     onProgress?.({
       phaseId: phase.id,
       status: 'start',
       agentCount: phase.agents.length,
+      detail: agentNames,
     });
 
     // Build task factories with TruncationError retry (max 1 retry)

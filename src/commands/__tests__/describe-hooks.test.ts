@@ -22,96 +22,64 @@ function makeSpec(overrides?: Partial<EnvironmentSpec>): EnvironmentSpec {
       skills: {},
       agents: { debugger: '# Debugger\nRoot-cause analysis.' },
       docs: {},
-      hooks: {
-        'intent-router': '// router script content',
-        'intent-learner': '// learner script content',
-      },
-      intent_patterns: [
-        {
-          pattern: '\\b(deploy|ship)\\b',
-          command: '/project:deploy',
-          description: 'Deploy to production',
-          source: 'generated',
-        },
-      ],
-      intent_prompt_template: 'You are an intent classifier...',
+      hooks: {},
+      intent_patterns: [],
+      intent_prompt_template: '',
     },
     ...overrides,
   };
 }
 
-describe('buildFileMap with hooks', () => {
-  it('includes intent-router.mjs in file map', () => {
+describe('buildFileMap after intent routing removal (v2.12)', () => {
+  it('does not include intent-router.mjs in file map', () => {
     const spec = makeSpec();
     const files = buildFileMap(spec);
-    expect(files.has('.claude/hooks/intent-router.mjs')).toBe(true);
-    expect(files.get('.claude/hooks/intent-router.mjs')).toBe('// router script content');
+    expect(files.has('.claude/hooks/intent-router.mjs')).toBe(false);
   });
 
-  it('includes intent-learner.mjs in file map', () => {
+  it('does not include intent-learner.mjs in file map', () => {
     const spec = makeSpec();
     const files = buildFileMap(spec);
-    expect(files.has('.claude/hooks/intent-learner.mjs')).toBe(true);
-    expect(files.get('.claude/hooks/intent-learner.mjs')).toBe('// learner script content');
+    expect(files.has('.claude/hooks/intent-learner.mjs')).toBe(false);
   });
 
-  it('settings.json contains UserPromptSubmit hooks', () => {
+  it('does not include intent-log.jsonl in file map', () => {
+    const spec = makeSpec();
+    const files = buildFileMap(spec);
+    expect(files.has('.claude/hooks/intent-log.jsonl')).toBe(false);
+  });
+
+  it('settings.json does not contain intent routing hooks in UserPromptSubmit', () => {
     const spec = makeSpec();
     const files = buildFileMap(spec);
     const settingsJson = files.get('.claude/settings.json');
-    expect(settingsJson).toBeDefined();
-    const settings = JSON.parse(settingsJson!);
-    expect(settings.hooks).toBeDefined();
-    expect(settings.hooks.UserPromptSubmit).toBeDefined();
-    expect(settings.hooks.UserPromptSubmit.length).toBeGreaterThan(0);
+    if (settingsJson) {
+      const settings = JSON.parse(settingsJson);
+      const upsHooks = settings.hooks?.UserPromptSubmit ?? [];
+      const intentHook = upsHooks.find((h: Record<string, unknown>) => {
+        const hooks = h.hooks as Array<Record<string, unknown>> | undefined;
+        return hooks?.some((hh) => typeof hh.command === 'string' && hh.command.includes('intent-router.mjs'));
+      });
+      expect(intentHook).toBeUndefined();
+    }
   });
 
-  it('UserPromptSubmit has Tier 1 command hook', () => {
+  it('settings.json does not contain intent-learner in SessionStart', () => {
     const spec = makeSpec();
     const files = buildFileMap(spec);
-    const settings = JSON.parse(files.get('.claude/settings.json')!);
-    const upsHooks = settings.hooks.UserPromptSubmit;
-    const tier1 = upsHooks.find((h: any) =>
-      h.hooks?.some((hh: any) => hh.type === 'command' && hh.command?.includes('intent-router.mjs'))
-    );
-    expect(tier1).toBeDefined();
+    const settingsJson = files.get('.claude/settings.json');
+    if (settingsJson) {
+      const settings = JSON.parse(settingsJson);
+      const sessionStart = settings.hooks?.SessionStart ?? [];
+      const learnerHook = sessionStart.find((h: Record<string, unknown>) => {
+        const hooks = h.hooks as Array<Record<string, unknown>> | undefined;
+        return hooks?.some((hh) => typeof hh.command === 'string' && hh.command.includes('intent-learner.mjs'));
+      });
+      expect(learnerHook).toBeUndefined();
+    }
   });
 
-  it('UserPromptSubmit has Tier 2 prompt hook', () => {
-    const spec = makeSpec();
-    const files = buildFileMap(spec);
-    const settings = JSON.parse(files.get('.claude/settings.json')!);
-    const upsHooks = settings.hooks.UserPromptSubmit;
-    const tier2 = upsHooks.find((h: any) =>
-      h.hooks?.some((hh: any) => hh.type === 'prompt')
-    );
-    expect(tier2).toBeDefined();
-  });
-
-  it('SessionStart includes intent-learner hook', () => {
-    const spec = makeSpec();
-    const files = buildFileMap(spec);
-    const settings = JSON.parse(files.get('.claude/settings.json')!);
-    const sessionStart = settings.hooks?.SessionStart;
-    expect(sessionStart).toBeDefined();
-    const learnerHook = sessionStart?.find((h: any) =>
-      h.hooks?.some((hh: any) => hh.command?.includes('intent-learner.mjs'))
-    );
-    expect(learnerHook).toBeDefined();
-  });
-
-  it('hook paths use $CLAUDE_PROJECT_DIR', () => {
-    const spec = makeSpec();
-    const files = buildFileMap(spec);
-    const settings = JSON.parse(files.get('.claude/settings.json')!);
-    const upsHooks = settings.hooks.UserPromptSubmit;
-    const tier1 = upsHooks.find((h: any) =>
-      h.hooks?.some((hh: any) => hh.command?.includes('$CLAUDE_PROJECT_DIR'))
-    );
-    expect(tier1).toBeDefined();
-  });
-
-  it('preserves existing settings (statusLine, env loader)', () => {
+  it('preserves existing settings (statusLine)', () => {
     const spec = makeSpec({
       harness: {
         ...makeSpec().harness,
@@ -119,29 +87,38 @@ describe('buildFileMap with hooks', () => {
         commands: { status: '# Status\nShow status.' },
       },
     });
-    const files = buildFileMap(spec, { hasEnvVars: true });
+    const files = buildFileMap(spec);
     const settings = JSON.parse(files.get('.claude/settings.json')!);
     expect(settings.statusLine).toBeDefined();
-    // Should also have env loader hook in SessionStart
-    const sessionStart = settings.hooks?.SessionStart;
-    expect(sessionStart?.length).toBeGreaterThanOrEqual(2); // env loader + intent learner
   });
 
-  it('handles spec with no hooks gracefully', () => {
+  it('handles spec with empty hooks gracefully', () => {
     const spec = makeSpec();
     spec.harness.hooks = {};
     spec.harness.intent_patterns = [];
     spec.harness.intent_prompt_template = '';
     const files = buildFileMap(spec);
-    // Should not write empty hook files
+    // Should not write any hook files (no persist-router for L1)
     expect(files.has('.claude/hooks/intent-router.mjs')).toBe(false);
+    expect(files.has('.claude/hooks/intent-learner.mjs')).toBe(false);
   });
 
-  it('includes intent-log.jsonl placeholder', () => {
+  it('includes persist-router for L3+ code projects', () => {
+    const spec = makeSpec({
+      autonomy_level: 3,
+      harness: {
+        ...makeSpec().harness,
+        commands: { status: '# Status\nShow status.', test: '# Test\nRun tests.' },
+      },
+    });
+    const files = buildFileMap(spec);
+    expect(files.has('.claude/hooks/persist-router.mjs')).toBe(true);
+  });
+
+  it('does not include persist-router for L1 projects', () => {
     const spec = makeSpec();
     const files = buildFileMap(spec);
-    expect(files.has('.claude/hooks/intent-log.jsonl')).toBe(true);
-    expect(files.get('.claude/hooks/intent-log.jsonl')).toBe('');
+    expect(files.has('.claude/hooks/persist-router.mjs')).toBe(false);
   });
 });
 

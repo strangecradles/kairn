@@ -124,8 +124,9 @@ describe("backward compatibility: legacy EnvironmentSpec without ir field", () =
     // Agents must be present
     expect(fileMap.has(".claude/agents/reviewer.md")).toBe(true);
 
-    // Docs must be present
-    expect(fileMap.has(".claude/docs/DECISIONS.md")).toBe(true);
+    // Docs: stub content is filtered out by isPlaceholderDoc (v2.12 living docs)
+    // "# Decisions\n\nRecord decisions here." has < 50 chars of non-header content
+    expect(fileMap.has(".claude/docs/DECISIONS.md")).toBe(false);
   });
 
   it("buildFileMap handles spec with minimal harness fields gracefully", () => {

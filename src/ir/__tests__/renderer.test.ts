@@ -132,6 +132,146 @@ describe("renderClaudeMd", () => {
     expect(result).toContain("## Purpose");
     expect(result.endsWith("\n")).toBe(true);
   });
+
+  it("appends Available Commands section when commands are provided", () => {
+    const meta: HarnessMeta = {
+      name: "Test",
+      purpose: "",
+      techStack: { language: "" },
+      autonomyLevel: 2,
+    };
+    const sections: Section[] = [
+      createSection("preamble", "# Test", "Preamble text.", 0),
+    ];
+    const commands = [
+      { name: "build", description: "Build the project" },
+      { name: "test", description: "Run tests" },
+      { name: "deploy", description: "Deploy with safety checks" },
+    ];
+
+    const result = renderClaudeMd(meta, sections, commands);
+
+    expect(result).toContain("## Available Commands");
+    expect(result).toContain("- `/project:build` — Build the project");
+    expect(result).toContain("- `/project:test` — Run tests");
+    expect(result).toContain("- `/project:deploy` — Deploy with safety checks");
+    expect(result).toContain("Only route when the user's clear intent is to execute a workflow.");
+    expect(result).toContain("Never route questions, discussions, or code reviews.");
+  });
+
+  it("does not append Available Commands section when commands array is empty", () => {
+    const meta: HarnessMeta = {
+      name: "Test",
+      purpose: "",
+      techStack: { language: "" },
+      autonomyLevel: 2,
+    };
+    const sections: Section[] = [
+      createSection("preamble", "# Test", "Preamble text.", 0),
+    ];
+
+    const result = renderClaudeMd(meta, sections, []);
+
+    expect(result).not.toContain("## Available Commands");
+  });
+
+  it("does not append Available Commands section when commands are undefined", () => {
+    const meta: HarnessMeta = {
+      name: "Test",
+      purpose: "",
+      techStack: { language: "" },
+      autonomyLevel: 2,
+    };
+    const sections: Section[] = [
+      createSection("preamble", "# Test", "Preamble text.", 0),
+    ];
+
+    const result = renderClaudeMd(meta, sections);
+
+    expect(result).not.toContain("## Available Commands");
+  });
+
+  it("appends Environment Variables section when envVars are provided", () => {
+    const meta: HarnessMeta = {
+      name: "Test",
+      purpose: "",
+      techStack: { language: "" },
+      autonomyLevel: 2,
+    };
+    const sections: Section[] = [
+      createSection("preamble", "# Test", "Preamble text.", 0),
+    ];
+    const envVars = [
+      { name: "GITHUB_TOKEN", description: "Personal access token" },
+      { name: "EXA_API_KEY", description: "Exa API key for semantic search" },
+    ];
+
+    const result = renderClaudeMd(meta, sections, undefined, envVars);
+
+    expect(result).toContain("## Environment Variables");
+    expect(result).toContain("- `GITHUB_TOKEN` — Personal access token");
+    expect(result).toContain("- `EXA_API_KEY` — Exa API key for semantic search");
+    expect(result).toContain("Set these in your shell before starting Claude.");
+  });
+
+  it("does not append Environment Variables section when envVars array is empty", () => {
+    const meta: HarnessMeta = {
+      name: "Test",
+      purpose: "",
+      techStack: { language: "" },
+      autonomyLevel: 2,
+    };
+    const sections: Section[] = [
+      createSection("preamble", "# Test", "Preamble text.", 0),
+    ];
+
+    const result = renderClaudeMd(meta, sections, undefined, []);
+
+    expect(result).not.toContain("## Environment Variables");
+  });
+
+  it("does not append Environment Variables section when envVars is undefined", () => {
+    const meta: HarnessMeta = {
+      name: "Test",
+      purpose: "",
+      techStack: { language: "" },
+      autonomyLevel: 2,
+    };
+    const sections: Section[] = [
+      createSection("preamble", "# Test", "Preamble text.", 0),
+    ];
+
+    const result = renderClaudeMd(meta, sections);
+
+    expect(result).not.toContain("## Environment Variables");
+  });
+
+  it("appends both commands and env vars sections when both provided", () => {
+    const meta: HarnessMeta = {
+      name: "Test",
+      purpose: "",
+      techStack: { language: "" },
+      autonomyLevel: 2,
+    };
+    const sections: Section[] = [
+      createSection("preamble", "# Test", "Preamble text.", 0),
+    ];
+    const commands = [
+      { name: "build", description: "Build the project" },
+    ];
+    const envVars = [
+      { name: "API_KEY", description: "API key for the service" },
+    ];
+
+    const result = renderClaudeMd(meta, sections, commands, envVars);
+
+    expect(result).toContain("## Available Commands");
+    expect(result).toContain("## Environment Variables");
+    // Commands should come before env vars
+    const cmdIdx = result.indexOf("## Available Commands");
+    const envIdx = result.indexOf("## Environment Variables");
+    expect(cmdIdx).toBeLessThan(envIdx);
+  });
 });
 
 // ---------------------------------------------------------------------------
