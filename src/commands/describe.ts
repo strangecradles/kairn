@@ -154,6 +154,7 @@ export const describeCommand = new Command("describe")
         await persistHarnessIR(process.cwd(), spec.ir);
       } catch {
         // Non-fatal: IR persistence is a best-effort optimization
+        console.log(ui.warn("Could not persist harness IR to .kairn/harness-ir.json"));
       }
     }
 

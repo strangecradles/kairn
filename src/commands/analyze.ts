@@ -9,6 +9,8 @@
 
 import { Command } from 'commander';
 import chalk from 'chalk';
+import fs from 'fs/promises';
+import path from 'path';
 import ora from 'ora';
 import { loadConfig } from '../config.js';
 import { scanProject } from '../scanner/scan.js';
@@ -16,6 +18,8 @@ import { analyzeProject } from '../analyzer/analyze.js';
 import { AnalysisError } from '../analyzer/types.js';
 import type { ProjectAnalysis } from '../analyzer/types.js';
 import { readCache } from '../analyzer/cache.js';
+import { buildIRSummary } from '../evolve/proposer.js';
+import type { HarnessIR } from '../ir/types.js';
 import { ui } from '../ui.js';
 import { printCompactBanner } from '../logo.js';
 
@@ -24,6 +28,7 @@ export interface AnalyzeOptions {
   refresh?: boolean;
   json?: boolean;
   tokenBudget?: number;
+  ir?: boolean;
 }
 
 /**
@@ -33,6 +38,35 @@ export interface AnalyzeOptions {
  * without going through Commander's argument parsing layer.
  */
 export async function analyzeAction(options: AnalyzeOptions): Promise<void> {
+  // --ir: display the persisted HarnessIR summary without running analysis
+  if (options.ir) {
+    const irPath = path.join(process.cwd(), '.kairn', 'harness-ir.json');
+    try {
+      const raw = await fs.readFile(irPath, 'utf-8');
+      const ir = JSON.parse(raw) as HarnessIR;
+      if (!options.json) {
+        printCompactBanner();
+        console.log(ui.section('Harness IR'));
+        console.log(buildIRSummary(ir));
+        console.log('');
+        console.log(chalk.dim(`  Source: ${irPath}`));
+        console.log('');
+      } else {
+        console.log(JSON.stringify(ir, null, 2));
+      }
+    } catch {
+      if (options.json) {
+        console.log(JSON.stringify({ error: 'No harness IR found. Run `kairn optimize` first.' }));
+      } else {
+        printCompactBanner();
+        console.log(ui.warn('No harness IR found. Run `kairn optimize` first.'));
+        console.log('');
+      }
+      process.exit(1);
+    }
+    return;
+  }
+
   // If --json, suppress all non-JSON output
   if (!options.json) {
     printCompactBanner();
@@ -218,5 +252,6 @@ export const analyzeCommand = new Command('analyze')
   )
   .option('--refresh', 'Force re-analysis, bypassing cache')
   .option('--json', 'Output raw JSON (for piping)')
+  .option('--ir', 'Display the persisted harness IR from .kairn/harness-ir.json')
   .option('--token-budget <tokens>', 'Max tokens of source code to sample (default: 60000)', parseInt)
   .action(analyzeAction);

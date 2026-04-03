@@ -12,7 +12,7 @@ import { measureComplexity, measureComplexityFromIR, computeComplexityCost, appl
 import { parseHarness } from '../ir/parser.js';
 import { translateMutations } from '../ir/translate.js';
 import { filterTasksByAspects, mutationsToAspects } from './targeting.js';
-import { PACKED_SOURCE_FILENAME } from '../analyzer/cache.js';
+import { CACHE_FILENAME, PACKED_SOURCE_FILENAME } from '../analyzer/cache.js';
 import type { HarnessAspect } from './targeting.js';
 import type { HarnessIR } from '../ir/types.js';
 import type { ProjectContext } from './proposer.js';
@@ -43,7 +43,7 @@ async function loadProjectContext(
   projectDir: string,
 ): Promise<{ analysis: ProjectAnalysis; keySourceFiles: string } | null> {
   try {
-    const analysisPath = path.join(projectDir, '.kairn-analysis.json');
+    const analysisPath = path.join(projectDir, CACHE_FILENAME);
     const analysisRaw = await fs.readFile(analysisPath, 'utf-8');
     const analysisCache = JSON.parse(analysisRaw) as { analysis: ProjectAnalysis };
     const analysis = analysisCache.analysis;

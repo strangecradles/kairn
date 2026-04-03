@@ -30,7 +30,8 @@ function getKairnVersion(): string {
 
 const KAIRN_VERSION = getKairnVersion();
 
-const CACHE_FILENAME = '.kairn-analysis.json';
+/** Filename for the on-disk analysis cache written to the project root. */
+export const CACHE_FILENAME = '.kairn-analysis.json';
 
 /** Filename for the cached packed source code alongside the analysis cache. */
 export const PACKED_SOURCE_FILENAME = '.kairn-packed-source.txt';
@@ -56,6 +57,17 @@ export async function readCache(dir: string): Promise<AnalysisCache | null> {
   try {
     const raw = await fs.readFile(filePath, 'utf-8');
     const parsed: unknown = JSON.parse(raw);
+
+    // Minimal runtime validation: ensure the required `analysis` field is an object
+    if (
+      typeof parsed !== 'object' ||
+      parsed === null ||
+      typeof (parsed as Record<string, unknown>).analysis !== 'object' ||
+      (parsed as Record<string, unknown>).analysis === null
+    ) {
+      return null;
+    }
+
     const cache = parsed as Omit<AnalysisCache, 'packedSource'>;
 
     // Attempt to read packed source file (may not exist for older caches)

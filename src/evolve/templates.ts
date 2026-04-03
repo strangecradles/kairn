@@ -177,6 +177,8 @@ Return a JSON object with a "tasks" array. Each task has:
 - category: "harness-sensitivity" or "substantive"
 - timeout: seconds (300 for features/bugs, 600 for refactors, 180 for config/docs/tests)
 
+BALANCE REQUIREMENT: Generate an equal number of harness-sensitivity tasks and substantive tasks. If you are given N templates total, aim for ceil(N/2) harness-sensitivity tasks and floor(N/2) substantive tasks. Do not skew toward one category.
+
 Return ONLY valid JSON, no markdown fences.`;
 
 /**
