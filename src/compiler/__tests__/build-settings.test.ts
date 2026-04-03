@@ -171,15 +171,20 @@ describe('buildSettings() — tech-stack-aware permissions', () => {
     expect(allow).toContain('Bash(npm run *)');
   });
 
-  it('always includes standard deny rules', () => {
+  it('always includes core deny rules (rm, curl|sh, wget|sh, secrets)', () => {
     const settings = buildSettings(makeSkeleton(['Python']), emptyRegistry);
     const { deny } = getPermissions(settings);
 
     expect(deny).toContain('Bash(rm -rf *)');
     expect(deny).toContain('Bash(curl * | sh)');
     expect(deny).toContain('Bash(wget * | sh)');
-    expect(deny).toContain('Read(./.env)');
     expect(deny).toContain('Read(./secrets/**)');
+  });
+
+  it('includes Read(./.env) in deny when no tools use env vars', () => {
+    const settings = buildSettings(makeSkeleton(['Python']), emptyRegistry);
+    const { deny } = getPermissions(settings);
+    expect(deny).toContain('Read(./.env)');
   });
 });
 

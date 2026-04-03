@@ -204,7 +204,7 @@ describe('resolveSettings — .env loader hook removed', () => {
       },
     });
 
-    const files = buildFileMap(spec, { hasEnvVars: true });
+    const files = buildFileMap(spec);
     const settingsJson = files.get('.claude/settings.json');
     expect(settingsJson).toBeDefined();
 

@@ -53,9 +53,8 @@ function simpleDiff(oldContent: string, newContent: string): string[] {
 async function generateDiff(
   spec: EnvironmentSpec,
   targetDir: string,
-  options?: { hasEnvVars?: boolean }
 ): Promise<FileDiff[]> {
-  const fileMap = buildFileMap(spec, options);
+  const fileMap = buildFileMap(spec);
   const results: FileDiff[] = [];
 
   for (const [relativePath, newContent] of fileMap) {
@@ -309,7 +308,7 @@ export const optimizeCommand = new Command("optimize")
     const hasEnvVars = summary.envSetup.length > 0;
 
     if (options.diff) {
-      const diffs = await generateDiff(spec, targetDir, { hasEnvVars });
+      const diffs = await generateDiff(spec, targetDir);
       const changedDiffs = diffs.filter((d) => d.status !== "unchanged");
 
       if (changedDiffs.length === 0) {
@@ -349,7 +348,7 @@ export const optimizeCommand = new Command("optimize")
       console.log(ui.success(`Ready! Run: $ hermes`));
       console.log("");
     } else {
-      const written = await writeEnvironment(spec, targetDir, { hasEnvVars });
+      const written = await writeEnvironment(spec, targetDir);
 
       console.log(ui.section("Files Written"));
       for (const file of written) {

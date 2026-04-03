@@ -450,36 +450,36 @@ Full plan: [`PLAN-v2.7.0.md`](PLAN-v2.7.0.md)
 > First real-world test (inferix — Python/Docker ML project) exposed 6 critical generation flaws. CLAUDE.md hallucinated project structure, intent router false-positives on common English, hardcoded Node.js permissions for Python projects, empty scaffold docs waste context, .env injection contradicts deny rules. Rules and safety hooks praised as strong.
 
 **describe → optimize gating:**
-- [ ] Detect existing repos in `kairn describe` (package.json, requirements.txt, Dockerfile, src/, >5 files)
-- [ ] Show redirect prompt: "This looks like an existing project. Use `kairn optimize` for better results."
-- [ ] Programmatic redirect to `optimizeCommand` on confirm
+- [x] Detect existing repos in `kairn describe` (package.json, requirements.txt, Dockerfile, src/, >5 files)
+- [x] Show redirect prompt: "This looks like an existing project. Use `kairn optimize` for better results."
+- [x] Programmatic redirect to `optimizeCommand` on confirm
 
 **Intent routing overhaul:**
-- [ ] Remove `intent-router.mjs`, `intent-learner.mjs`, intent-log/promotions files from generation
-- [ ] Remove `src/intent/` directory (patterns.ts, prompt-template.ts, router-template.ts, learner-template.ts)
-- [ ] Add "Available Commands" section to CLAUDE.md via `renderClaudeMd()` (portable, works with any agent)
-- [ ] Optional strict prompt hook in `settings.json` for Claude Code (autonomy level 2+ only)
-- [ ] Remove UserPromptSubmit regex hook and SessionStart learner hook from `buildSettings()`
+- [x] Remove `intent-router.mjs`, `intent-learner.mjs`, intent-log/promotions files from generation
+- [x] Remove `src/intent/` directory (patterns.ts, prompt-template.ts, router-template.ts, learner-template.ts)
+- [x] Add "Available Commands" section to CLAUDE.md via `renderClaudeMd()` (portable, works with any agent)
+- [x] Optional strict prompt hook in `settings.json` for Claude Code (autonomy level 2+ only)
+- [x] Remove UserPromptSubmit regex hook and SessionStart learner hook from `buildSettings()`
 
 **Tech-stack-aware permissions:**
-- [ ] Derive `settings.json` allow-list from skeleton tech_stack (Python→pytest/pip, Go→go, Rust→cargo, Docker→docker)
-- [ ] Remove hardcoded `Bash(npm run *)`, `Bash(npx *)` — only add when Node.js detected
-- [ ] Add PostToolUse formatter hook for Python (ruff/black) when Python detected
+- [x] Derive `settings.json` allow-list from skeleton tech_stack (Python→pytest/pip, Go→go, Rust→cargo, Docker→docker)
+- [x] Remove hardcoded `Bash(npm run *)`, `Bash(npx *)` — only add when Node.js detected
+- [x] Add PostToolUse formatter hook for Python (ruff/black) when Python detected
 
 **Living docs (not empty scaffolds):**
-- [ ] Filter empty placeholder docs in adapter — skip writing if content matches template filler
-- [ ] Add PostToolUse prompt hook nudging doc updates after meaningful Write/Edit operations
-- [ ] Update `@doc-writer` prompt to produce substantive content or nothing
+- [x] Filter empty placeholder docs in adapter — skip writing if content matches template filler
+- [x] Add PostToolUse prompt hook nudging doc updates after meaningful Write/Edit operations
+- [x] Update `@doc-writer` prompt to produce substantive content or nothing
 
 **Compilation UX improvements:**
-- [ ] Animated spinner frames in `createProgressRenderer()` (braille dots or ora-style)
-- [ ] Cumulative elapsed timer alongside per-phase timer
-- [ ] Richer phase descriptions with agent names ("Writing rules: security, continuity...")
+- [x] Animated spinner frames in `createProgressRenderer()` (braille dots or ora-style)
+- [x] Cumulative elapsed timer alongside per-phase timer
+- [x] Richer phase descriptions with agent names ("Writing rules: security, continuity...")
 
 **Honest .env handling:**
-- [ ] Remove SessionStart .env injection hook from all generated settings.json
-- [ ] Make `Read(./.env)` deny conditional: only deny when project doesn't use env vars
-- [ ] Document expected env vars in CLAUDE.md when project needs them
+- [x] Remove SessionStart .env injection hook from all generated settings.json
+- [x] Make `Read(./.env)` deny conditional: only deny when project doesn't use env vars
+- [x] Document expected env vars in CLAUDE.md when project needs them
 
 ### v2.13.0 — Principal-as-Architect (Creative Evolution) ([design doc](docs/design/v2.13-principal-architect.md))
 > The proposer is gradient descent with a tiny learning rate — it fixes what's broken but can't imagine what's possible. The Principal-as-Architect adds an exploration mode that proposes structural improvements, not just reactive patches. Combined with a cross-repo research protocol, this closes the feedback loop between evolve discoveries and generation templates.

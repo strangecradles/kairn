@@ -56,7 +56,9 @@ export interface EnvironmentSpec {
     agents: Record<string, string>;
     docs: Record<string, string>;
     hooks: Record<string, string>;
+    /** @deprecated Intent routing removed in v2.12. Retained for backward-compatible env loading. */
     intent_patterns: IntentPattern[];
+    /** @deprecated Intent routing removed in v2.12. Retained for backward-compatible env loading. */
     intent_prompt_template: string;
   };
 }

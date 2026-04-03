@@ -300,7 +300,7 @@ export async function compile(
   }
   onProgress?.({ phase: 'phase-c', status: 'success', message: 'Pass 3c: Cross-reference validation', elapsed: (Date.now() - startTime) / 1000 });
 
-  // Pass 4: Deterministic assembly (settings, MCP, intents)
+  // Pass 4: Deterministic assembly (settings, MCP)
   onProgress?.({ phase: 'assembly', status: 'running', message: 'Pass 4: Configuring MCP servers & settings...' });
   const settings = buildSettings(skeleton, registry);
   const mcpConfig = buildMcpConfig(skeleton, registry);

@@ -1,7 +1,6 @@
 import { Command } from "commander";
 import { input, confirm, select } from "@inquirer/prompts";
 import chalk from "chalk";
-import ora from "ora";
 import { loadConfig } from "../config.js";
 import { generateClarifications, compile } from "../compiler/compile.js";
 import { writeEnvironment, summarizeSpec } from "../adapter/claude-code.js";
@@ -198,7 +197,7 @@ export const describeCommand = new Command("describe")
       );
     } else {
       const hasEnvVars = summary.envSetup.length > 0;
-      const written = await writeEnvironment(spec, targetDir, { hasEnvVars });
+      const written = await writeEnvironment(spec, targetDir);
 
       console.log(ui.section("Files Written"));
       console.log("");

@@ -96,7 +96,6 @@ const PERSIST_ROUTER_HOOK = {
 
 function resolveSettings(
   spec: EnvironmentSpec,
-  options?: { hasEnvVars?: boolean }
 ): Record<string, unknown> | null {
   const settings = spec.harness.settings;
   const base: Record<string, unknown> = settings && Object.keys(settings).length > 0
@@ -121,7 +120,25 @@ function resolveSettings(
     base.hooks = hooks;
   }
 
-  // Intent routing hooks removed in v2.12 — replaced by "Available Commands" section in CLAUDE.md
+  // Optional strict classification prompt hook for autonomy level 2+
+  // Replaces intent routing regex with a model-based classifier
+  if ((spec.autonomy_level ?? 1) >= 2 && spec.harness.commands && Object.keys(spec.harness.commands).length > 0) {
+    const cmdList = Object.keys(spec.harness.commands)
+      .map((name) => `/project:${name}`)
+      .join(', ');
+    const hooks = (base.hooks ?? {}) as Record<string, unknown[]>;
+    const userPromptSubmit = (hooks.UserPromptSubmit ?? []) as unknown[];
+    userPromptSubmit.push({
+      matcher: '',
+      hooks: [{
+        type: 'prompt',
+        prompt: `You are routing user intent to project commands. ONLY route if the user EXPLICITLY asks to perform one of these actions. If they're asking a question, discussing code, or the intent is ambiguous, respond naturally — do NOT route.\n\nCommands: ${cmdList}\n\nRespond with ONLY the command name if routing, or "NONE" if not routing.`,
+        timeout: 10,
+      }],
+    });
+    hooks.UserPromptSubmit = userPromptSubmit;
+    base.hooks = hooks;
+  }
 
   if (Object.keys(base).length === 0) return null;
   return base;
@@ -163,7 +180,6 @@ function isPlaceholderDoc(content: string): boolean {
 
 export function buildFileMap(
   spec: EnvironmentSpec,
-  options?: { hasEnvVars?: boolean }
 ): Map<string, string> {
   // Apply autonomy-level content before building file map
   applyAutonomyLevel(spec);
@@ -173,7 +189,7 @@ export function buildFileMap(
   if (spec.harness.claude_md) {
     files.set(".claude/CLAUDE.md", spec.harness.claude_md);
   }
-  const resolvedSettings = resolveSettings(spec, options);
+  const resolvedSettings = resolveSettings(spec);
   if (resolvedSettings) {
     files.set(".claude/settings.json", JSON.stringify(resolvedSettings, null, 2));
   }
@@ -227,7 +243,6 @@ export function buildFileMap(
 export async function writeEnvironment(
   spec: EnvironmentSpec,
   targetDir: string,
-  options?: { hasEnvVars?: boolean }
 ): Promise<string[]> {
   // Apply autonomy-level content before writing
   applyAutonomyLevel(spec);
@@ -243,7 +258,7 @@ export async function writeEnvironment(
   }
 
   // 2. settings.json
-  const resolvedSettings = resolveSettings(spec, options);
+  const resolvedSettings = resolveSettings(spec);
   if (resolvedSettings) {
     const p = path.join(claudeDir, "settings.json");
     await writeFile(p, JSON.stringify(resolvedSettings, null, 2));
