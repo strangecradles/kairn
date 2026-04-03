@@ -181,7 +181,7 @@ describe('analyzeProject', () => {
     expect(opts.exclude).toEqual(
       expect.arrayContaining(['**/__tests__/**', '**/node_modules/**']),
     );
-    expect(opts.maxTokens).toBe(5000);
+    expect(opts.maxTokens).toBe(150_000);
   });
 
   it('calls callLLM with correct system prompt and user message', async () => {

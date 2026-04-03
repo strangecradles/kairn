@@ -102,11 +102,15 @@ Return a single JSON object (no markdown fences, no explanation):
  * @throws {AnalysisError} With type `empty_sample` if no source files are found.
  * @throws {AnalysisError} With type `llm_parse_failure` if the LLM response is not valid JSON or missing required fields.
  */
+/** Default token budget for codebase sampling. 150K tokens covers ~85% of a
+ *  medium codebase (20K LOC) and costs <$0.50 on Sonnet. Cached after first run. */
+const DEFAULT_TOKEN_BUDGET = 150_000;
+
 export async function analyzeProject(
   dir: string,
   profile: ProjectProfile,
   config: KairnConfig,
-  options?: { refresh?: boolean },
+  options?: { refresh?: boolean; tokenBudget?: number },
 ): Promise<ProjectAnalysis> {
   // 1. Check cache (unless refresh is forced)
   if (!options?.refresh) {
@@ -144,7 +148,7 @@ export async function analyzeProject(
   const packed = await packCodebase(dir, {
     include,
     exclude: strategy.excludePatterns,
-    maxTokens: 5000,
+    maxTokens: options?.tokenBudget ?? DEFAULT_TOKEN_BUDGET,
   });
 
   // 5. Guard: empty sample

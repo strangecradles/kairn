@@ -23,6 +23,7 @@ import { printCompactBanner } from '../logo.js';
 export interface AnalyzeOptions {
   refresh?: boolean;
   json?: boolean;
+  tokenBudget?: number;
 }
 
 /**
@@ -107,6 +108,7 @@ export async function analyzeAction(options: AnalyzeOptions): Promise<void> {
   try {
     analysis = await analyzeProject(targetDir, profile, config, {
       refresh: options.refresh,
+      tokenBudget: options.tokenBudget,
     });
     analysisSpinner?.succeed(
       options.refresh ? 'Re-analyzed from scratch' : 'Codebase analyzed',
@@ -210,4 +212,5 @@ export const analyzeCommand = new Command('analyze')
   )
   .option('--refresh', 'Force re-analysis, bypassing cache')
   .option('--json', 'Output raw JSON (for piping)')
+  .option('--token-budget <tokens>', 'Max tokens of source code to sample (default: 150000)', parseInt)
   .action(analyzeAction);
