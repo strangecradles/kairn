@@ -347,10 +347,15 @@ export async function compile(
     tools: skeleton.tools,
     ir,
     harness: {
-      claude_md: renderClaudeMd(ir.meta, ir.sections, ir.commands.map(c => ({
-        name: c.name,
-        description: c.content.split('\n').find(line => line.trim() && !line.startsWith('#'))?.trim() || c.name,
-      }))),
+      claude_md: renderClaudeMd(
+        ir.meta,
+        ir.sections,
+        ir.commands.map(c => ({
+          name: c.name,
+          description: c.content.split('\n').find(line => line.trim() && !line.startsWith('#'))?.trim() || c.name,
+        })),
+        envVars.length > 0 ? envVars : undefined,
+      ),
       settings,
       mcp_config: mcpConfig,
       commands,

@@ -30,11 +30,26 @@ import type {
  * `{heading}\n\n{content}` — the heading already includes its `## ` prefix
  * (or `# ` for the preamble). Sections are joined with double newlines.
  *
+ * If `commands` are provided, an "Available Commands" section is appended
+ * listing each command with its description. This replaces the old intent
+ * routing infrastructure (removed in v2.12).
+ *
+ * If `envVars` are provided, an "Environment Variables" section is appended
+ * documenting the expected env vars. This replaces the old SessionStart
+ * .env injection hook with honest documentation (v2.12).
+ *
  * @param _meta - Harness metadata (name used only if no preamble section provides a title)
  * @param sections - The ordered sections to render
+ * @param commands - Optional array of command name/description pairs to list
+ * @param envVars - Optional array of environment variable name/description pairs
  * @returns The full CLAUDE.md content string with trailing newline
  */
-export function renderClaudeMd(_meta: HarnessMeta, sections: Section[]): string {
+export function renderClaudeMd(
+  _meta: HarnessMeta,
+  sections: Section[],
+  commands?: Array<{ name: string; description: string }>,
+  envVars?: Array<{ name: string; description: string }>,
+): string {
   const sorted = [...sections].sort((a, b) => a.order - b.order);
 
   const blocks: string[] = [];
@@ -48,6 +63,26 @@ export function renderClaudeMd(_meta: HarnessMeta, sections: Section[]): string 
       blocks.push(section.content);
     }
     // Skip sections with neither heading nor content
+  }
+
+  // Add "Available Commands" section if commands are provided
+  if (commands && commands.length > 0) {
+    const cmdLines = commands
+      .map((c) => `- \`/project:${c.name}\` — ${c.description}`)
+      .join('\n');
+    blocks.push(
+      `## Available Commands\n\nWhen the user explicitly asks to run a workflow, use the appropriate command:\n${cmdLines}\n\nOnly route when the user's clear intent is to execute a workflow.\nNever route questions, discussions, or code reviews.`
+    );
+  }
+
+  // Add "Environment Variables" section if env vars are provided
+  if (envVars && envVars.length > 0) {
+    const varLines = envVars
+      .map((v) => `- \`${v.name}\` — ${v.description}`)
+      .join('\n');
+    blocks.push(
+      `## Environment Variables\n\nThis project uses environment variables. Expected:\n${varLines}\n\nSet these in your shell before starting Claude.`
+    );
   }
 
   if (blocks.length === 0) {

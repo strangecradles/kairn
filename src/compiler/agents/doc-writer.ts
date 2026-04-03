@@ -76,6 +76,8 @@ Each doc should follow these structural patterns:
 - Use Markdown formatting with clear headers
 - Acceptance Criteria in SPRINT docs must use checkbox format: \`- [ ] Criterion\`
 - Keep templates practical — they'll be filled in during development
+- If you cannot produce meaningful, project-specific content for a document, return an empty content string (""). Empty is better than template filler like "(Add decisions here)".
+- Pre-populate docs with real content based on the project intent when possible.
 - Return ONLY the JSON array, no surrounding text`;
 
 // ---------------------------------------------------------------------------

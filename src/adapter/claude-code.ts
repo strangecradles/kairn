@@ -13,14 +13,6 @@ function isCodeProject(spec: EnvironmentSpec): boolean {
   return "status" in commands || "test" in commands;
 }
 
-const ENV_LOADER_HOOK = {
-  matcher: "",
-  hooks: [{
-    type: "command",
-    command: 'if [ -f .env ] && [ -n "$CLAUDE_ENV_FILE" ]; then grep -v "^#" .env | grep -v "^$" | grep "=" >> "$CLAUDE_ENV_FILE"; fi',
-  }],
-};
-
 const PERSIST_ROUTER_TEMPLATE = `import { readFileSync } from 'fs';
 
 const input = JSON.parse(readFileSync('/dev/stdin', 'utf8'));
@@ -116,14 +108,8 @@ function resolveSettings(
     base.statusLine = STATUS_LINE;
   }
 
-  // Add SessionStart hook for .env loading
-  if (options?.hasEnvVars) {
-    const hooks = (base.hooks ?? {}) as Record<string, unknown[]>;
-    const sessionStart = (hooks.SessionStart ?? []) as unknown[];
-    sessionStart.push(ENV_LOADER_HOOK);
-    hooks.SessionStart = sessionStart;
-    base.hooks = hooks;
-  }
+  // .env loader hook removed in v2.12 — replaced by "Environment Variables"
+  // section in CLAUDE.md for honest, non-contradictory .env handling.
 
   // Add persist-router hook for L3+ code projects
   // (persistence_routing is set by applyAutonomyLevel for all levels)
@@ -135,50 +121,7 @@ function resolveSettings(
     base.hooks = hooks;
   }
 
-  // Add intent routing hooks if patterns exist
-  const hasIntentHooks = spec.harness.hooks &&
-    Object.keys(spec.harness.hooks).length > 0;
-
-  if (hasIntentHooks) {
-    const hooks = (base.hooks ?? {}) as Record<string, unknown[]>;
-
-    // Tier 1 (regex) + Tier 2 (prompt) on UserPromptSubmit
-    const userPromptSubmit = (hooks.UserPromptSubmit ?? []) as unknown[];
-    const intentHookEntry: Record<string, unknown> = {
-      matcher: '*',
-      hooks: [
-        {
-          type: 'command',
-          command: 'node "$CLAUDE_PROJECT_DIR/.claude/hooks/intent-router.mjs"',
-          timeout: 5,
-        },
-      ],
-    };
-    // Add Tier 2 prompt hook if template exists
-    if (spec.harness.intent_prompt_template) {
-      (intentHookEntry.hooks as unknown[]).push({
-        type: 'prompt',
-        prompt: spec.harness.intent_prompt_template,
-        timeout: 15,
-      });
-    }
-    userPromptSubmit.push(intentHookEntry);
-    hooks.UserPromptSubmit = userPromptSubmit;
-
-    // Intent learner on SessionStart
-    const sessionStart = (hooks.SessionStart ?? []) as unknown[];
-    sessionStart.push({
-      matcher: '*',
-      hooks: [{
-        type: 'command',
-        command: 'node "$CLAUDE_PROJECT_DIR/.claude/hooks/intent-learner.mjs"',
-        timeout: 10,
-      }],
-    });
-    hooks.SessionStart = sessionStart;
-
-    base.hooks = hooks;
-  }
+  // Intent routing hooks removed in v2.12 — replaced by "Available Commands" section in CLAUDE.md
 
   if (Object.keys(base).length === 0) return null;
   return base;
@@ -187,6 +130,35 @@ function resolveSettings(
 async function writeFile(filePath: string, content: string): Promise<void> {
   await fs.mkdir(path.dirname(filePath), { recursive: true });
   await fs.writeFile(filePath, content, "utf-8");
+}
+
+/**
+ * Detect docs that are just template placeholders with no real content.
+ *
+ * Returns true for docs that contain only headers, empty tables, or
+ * common placeholder phrases — these waste context without adding value.
+ */
+function isPlaceholderDoc(content: string): boolean {
+  // Check for common placeholder patterns
+  if (content.includes('(Add decisions here as they are made)')) return true;
+  if (content.includes('(Add learnings here as they are discovered)')) return true;
+
+  // Check if non-header content is too short
+  const nonHeaderLines = content
+    .split('\n')
+    .filter((line) => !line.startsWith('#') && !line.startsWith('|--') && line.trim().length > 0);
+
+  // Header-only tables with no data rows
+  const hasOnlyHeaderRows = nonHeaderLines.every(
+    (line) => line.startsWith('|') || line.startsWith('-') || line.trim() === ''
+  );
+  if (hasOnlyHeaderRows && nonHeaderLines.length <= 1) return true;
+
+  // Very short total content
+  const contentOnly = nonHeaderLines.join('').trim();
+  if (contentOnly.length < 50) return true;
+
+  return false;
 }
 
 export function buildFileMap(
@@ -236,20 +208,13 @@ export function buildFileMap(
   }
   if (spec.harness.docs) {
     for (const [name, content] of Object.entries(spec.harness.docs)) {
-      files.set(`.claude/docs/${name}.md`, content);
+      if (!isPlaceholderDoc(content)) {
+        files.set(`.claude/docs/${name}.md`, content);
+      }
     }
   }
 
-  // Hooks (intent-router.mjs, intent-learner.mjs)
-  if (spec.harness.hooks) {
-    for (const [name, content] of Object.entries(spec.harness.hooks)) {
-      files.set(`.claude/hooks/${name}.mjs`, content);
-    }
-    // Create empty intent-log.jsonl for Tier 2 logging
-    if (Object.keys(spec.harness.hooks).length > 0) {
-      files.set('.claude/hooks/intent-log.jsonl', '');
-    }
-  }
+  // Intent routing hooks removed in v2.12 — no intent-router.mjs, intent-learner.mjs, or intent-log.jsonl
 
   // Persist-router hook for L3+ code projects
   if (isCodeProject(spec) && (spec.autonomy_level ?? 1) >= 3) {
@@ -332,31 +297,20 @@ export async function writeEnvironment(
     }
   }
 
-  // 8. Docs
+  // 8. Docs (skip placeholder-only docs — they waste context)
   if (spec.harness.docs) {
     for (const [name, content] of Object.entries(spec.harness.docs)) {
-      const p = path.join(claudeDir, "docs", `${name}.md`);
-      await writeFile(p, content);
-      written.push(`.claude/docs/${name}.md`);
+      if (!isPlaceholderDoc(content)) {
+        const p = path.join(claudeDir, "docs", `${name}.md`);
+        await writeFile(p, content);
+        written.push(`.claude/docs/${name}.md`);
+      }
     }
   }
 
-  // 9. Hooks (intent-router.mjs, intent-learner.mjs)
-  if (spec.harness.hooks) {
-    for (const [name, content] of Object.entries(spec.harness.hooks)) {
-      const p = path.join(claudeDir, "hooks", `${name}.mjs`);
-      await writeFile(p, content);
-      written.push(`.claude/hooks/${name}.mjs`);
-    }
-    // Create empty intent-log.jsonl for Tier 2 logging
-    if (Object.keys(spec.harness.hooks).length > 0) {
-      const logPath = path.join(claudeDir, "hooks", "intent-log.jsonl");
-      await writeFile(logPath, '');
-      written.push('.claude/hooks/intent-log.jsonl');
-    }
-  }
+  // Intent routing hooks removed in v2.12 — no intent-router.mjs, intent-learner.mjs, or intent-log.jsonl
 
-  // 10. Persist-router hook for L3+ code projects
+  // 9. Persist-router hook for L3+ code projects
   if (isCodeProject(spec) && (spec.autonomy_level ?? 1) >= 3) {
     const p = path.join(claudeDir, "hooks", "persist-router.mjs");
     await writeFile(p, PERSIST_ROUTER_TEMPLATE);

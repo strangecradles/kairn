@@ -196,7 +196,7 @@ describe('E2E: Intent routing pipeline', () => {
     });
   });
 
-  describe('adapter integration: buildFileMap', () => {
+  describe('adapter integration: buildFileMap (v2.12 — intent routing removed)', () => {
     function makeFullSpec(): EnvironmentSpec {
       return {
         id: 'env_e2e-test',
@@ -215,51 +215,54 @@ describe('E2E: Intent routing pipeline', () => {
           skills: {},
           agents,
           docs: {},
-          hooks: {
-            'intent-router': routerScript,
-            'intent-learner': learnerScript,
-          },
-          intent_patterns: patterns,
-          intent_prompt_template: promptTemplate,
+          hooks: {},
+          intent_patterns: [],
+          intent_prompt_template: '',
         },
       };
     }
 
-    it('file map includes intent-router.mjs', () => {
+    it('file map does not include intent-router.mjs (removed in v2.12)', () => {
       const files = buildFileMap(makeFullSpec());
-      expect(files.has('.claude/hooks/intent-router.mjs')).toBe(true);
+      expect(files.has('.claude/hooks/intent-router.mjs')).toBe(false);
     });
 
-    it('file map includes intent-learner.mjs', () => {
+    it('file map does not include intent-learner.mjs (removed in v2.12)', () => {
       const files = buildFileMap(makeFullSpec());
-      expect(files.has('.claude/hooks/intent-learner.mjs')).toBe(true);
+      expect(files.has('.claude/hooks/intent-learner.mjs')).toBe(false);
     });
 
-    it('settings.json has UserPromptSubmit hooks', () => {
+    it('settings.json does not have intent routing hooks in UserPromptSubmit', () => {
       const files = buildFileMap(makeFullSpec());
-      const settings = JSON.parse(files.get('.claude/settings.json')!);
-      expect(settings.hooks.UserPromptSubmit).toBeDefined();
+      const settingsJson = files.get('.claude/settings.json');
+      if (settingsJson) {
+        const settings = JSON.parse(settingsJson);
+        const upsHooks = settings.hooks?.UserPromptSubmit ?? [];
+        const intentHook = upsHooks.find((h: Record<string, unknown>) => {
+          const hooks = h.hooks as Array<Record<string, unknown>> | undefined;
+          return hooks?.some((hh) => typeof hh.command === 'string' && hh.command.includes('intent-router.mjs'));
+        });
+        expect(intentHook).toBeUndefined();
+      }
     });
 
-    it('settings.json has SessionStart hooks with learner', () => {
+    it('settings.json does not have intent-learner in SessionStart', () => {
       const files = buildFileMap(makeFullSpec());
-      const settings = JSON.parse(files.get('.claude/settings.json')!);
-      expect(settings.hooks.SessionStart).toBeDefined();
-      const hasLearner = settings.hooks.SessionStart.some((h: any) =>
-        h.hooks?.some((hh: any) => hh.command?.includes('intent-learner.mjs'))
-      );
-      expect(hasLearner).toBe(true);
+      const settingsJson = files.get('.claude/settings.json');
+      if (settingsJson) {
+        const settings = JSON.parse(settingsJson);
+        const sessionStart = settings.hooks?.SessionStart ?? [];
+        const learnerHook = sessionStart.find((h: Record<string, unknown>) => {
+          const hooks = h.hooks as Array<Record<string, unknown>> | undefined;
+          return hooks?.some((hh) => typeof hh.command === 'string' && hh.command.includes('intent-learner.mjs'));
+        });
+        expect(learnerHook).toBeUndefined();
+      }
     });
 
-    it('settings.json Tier 2 prompt contains workflow manifest', () => {
+    it('file map does not include intent-log.jsonl', () => {
       const files = buildFileMap(makeFullSpec());
-      const settings = JSON.parse(files.get('.claude/settings.json')!);
-      const upsHooks = settings.hooks.UserPromptSubmit;
-      const promptHook = upsHooks
-        .flatMap((h: any) => h.hooks ?? [])
-        .find((hh: any) => hh.type === 'prompt');
-      expect(promptHook).toBeDefined();
-      expect(promptHook.prompt).toContain('/project:deploy');
+      expect(files.has('.claude/hooks/intent-log.jsonl')).toBe(false);
     });
   });
 });

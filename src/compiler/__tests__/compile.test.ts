@@ -54,21 +54,7 @@ vi.mock('../linker.js', () => ({
   linkHarness: vi.fn(),
 }));
 
-vi.mock('../../intent/patterns.js', () => ({
-  generateIntentPatterns: vi.fn(() => []),
-}));
-
-vi.mock('../../intent/prompt-template.js', () => ({
-  compileIntentPrompt: vi.fn(() => ''),
-}));
-
-vi.mock('../../intent/router-template.js', () => ({
-  renderIntentRouter: vi.fn(() => ''),
-}));
-
-vi.mock('../../intent/learner-template.js', () => ({
-  renderIntentLearner: vi.fn(() => ''),
-}));
+// Intent routing mocks removed in v2.12 — compile.ts no longer imports these modules
 
 vi.mock('fs/promises', () => ({
   default: {
@@ -81,7 +67,7 @@ vi.mock('fs/promises', () => ({
 // Import after mocks (vi.mock is hoisted above imports)
 // ---------------------------------------------------------------------------
 
-import { compile, generateClarifications } from '../compile.js';
+import { compile, generateClarifications, buildSettings } from '../compile.js';
 import { loadConfig } from '../../config.js';
 import { callLLM } from '../../llm.js';
 import { generatePlan } from '../plan.js';
@@ -330,6 +316,167 @@ describe('compile()', () => {
 
     // concurrency argument (3rd positional) should be 3
     expect(mockedExecutePlan.mock.calls[0][2]).toBe(3);
+  });
+
+  it('produces empty intent_patterns (intent routing removed in v2.12)', async () => {
+    const spec = await compile('Build a TypeScript CLI');
+
+    expect(spec.harness.intent_patterns).toEqual([]);
+  });
+
+  it('produces empty intent_prompt_template (intent routing removed in v2.12)', async () => {
+    const spec = await compile('Build a TypeScript CLI');
+
+    expect(spec.harness.intent_prompt_template).toBe('');
+  });
+
+  it('produces empty hooks (no intent-router/intent-learner)', async () => {
+    const spec = await compile('Build a TypeScript CLI');
+
+    expect(spec.harness.hooks).toEqual({});
+  });
+
+  it('includes Available Commands section in claude_md', async () => {
+    const spec = await compile('Build a TypeScript CLI');
+
+    // The IR has commands 'help' and 'build', so CLAUDE.md should include them
+    expect(spec.harness.claude_md).toContain('## Available Commands');
+    expect(spec.harness.claude_md).toContain('/project:help');
+    expect(spec.harness.claude_md).toContain('/project:build');
+  });
+
+  it('does not include Environment Variables section when no tools have env_vars', async () => {
+    const spec = await compile('Build a TypeScript CLI');
+
+    // The default mock registry tool (context7) has no env_vars
+    expect(spec.harness.claude_md).not.toContain('## Environment Variables');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// buildSettings — .env deny + doc-update hook
+// ---------------------------------------------------------------------------
+
+describe('buildSettings()', () => {
+  it('includes Read(./.env) in deny when no tools use env vars', () => {
+    const skeleton = makeSkeleton();
+    const registry = [
+      {
+        id: 'context7',
+        name: 'Context7',
+        description: 'Docs',
+        category: 'docs',
+        tier: 1,
+        type: 'mcp_server' as const,
+        auth: 'none' as const,
+        best_for: ['docs'],
+        install: {},
+      },
+    ];
+
+    const result = buildSettings(skeleton, registry);
+    const deny = (result.permissions as Record<string, string[]>).deny;
+    expect(deny).toContain('Read(./.env)');
+  });
+
+  it('omits Read(./.env) from deny when tools use api_key auth', () => {
+    const skeleton = makeSkeleton();
+    skeleton.tools = [{ tool_id: 'semgrep', reason: 'static analysis' }];
+    const registry = [
+      {
+        id: 'semgrep',
+        name: 'Semgrep',
+        description: 'Static analysis',
+        category: 'code-quality',
+        tier: 2,
+        type: 'mcp_server' as const,
+        auth: 'api_key' as const,
+        best_for: ['coding'],
+        env_vars: [{ name: 'SEMGREP_APP_TOKEN', description: 'Semgrep app token' }],
+        install: {},
+      },
+    ];
+
+    const result = buildSettings(skeleton, registry);
+    const deny = (result.permissions as Record<string, string[]>).deny;
+    expect(deny).not.toContain('Read(./.env)');
+  });
+
+  it('omits Read(./.env) from deny when tools have env_vars', () => {
+    const skeleton = makeSkeleton();
+    skeleton.tools = [{ tool_id: 'github', reason: 'GitHub access' }];
+    const registry = [
+      {
+        id: 'github',
+        name: 'GitHub',
+        description: 'GitHub integration',
+        category: 'scm',
+        tier: 1,
+        type: 'mcp_server' as const,
+        auth: 'none' as const,
+        best_for: ['coding'],
+        env_vars: [{ name: 'GITHUB_TOKEN', description: 'Personal access token' }],
+        install: {},
+      },
+    ];
+
+    const result = buildSettings(skeleton, registry);
+    const deny = (result.permissions as Record<string, string[]>).deny;
+    expect(deny).not.toContain('Read(./.env)');
+  });
+
+  it('always includes core deny rules regardless of env var usage', () => {
+    const skeleton = makeSkeleton();
+    const registry = [
+      {
+        id: 'context7',
+        name: 'Context7',
+        description: 'Docs',
+        category: 'docs',
+        tier: 1,
+        type: 'mcp_server' as const,
+        auth: 'none' as const,
+        best_for: ['docs'],
+        install: {},
+      },
+    ];
+
+    const result = buildSettings(skeleton, registry);
+    const deny = (result.permissions as Record<string, string[]>).deny;
+    expect(deny).toContain('Bash(rm -rf *)');
+    expect(deny).toContain('Bash(curl * | sh)');
+    expect(deny).toContain('Bash(wget * | sh)');
+    expect(deny).toContain('Read(./secrets/**)');
+  });
+
+  it('includes PostToolUse doc-update prompt hook', () => {
+    const skeleton = makeSkeleton();
+    const registry = [
+      {
+        id: 'context7',
+        name: 'Context7',
+        description: 'Docs',
+        category: 'docs',
+        tier: 1,
+        type: 'mcp_server' as const,
+        auth: 'none' as const,
+        best_for: ['docs'],
+        install: {},
+      },
+    ];
+
+    const result = buildSettings(skeleton, registry);
+    const hooks = result.hooks as Record<string, unknown[]>;
+    const postToolUse = hooks.PostToolUse as Array<{ matcher: string; hooks: Array<{ type: string; prompt?: string }> }>;
+    expect(postToolUse).toBeDefined();
+
+    // Find the doc-update prompt hook
+    const docUpdateHook = postToolUse.find(
+      (h) => h.matcher === 'Write|Edit' && h.hooks.some((hk) => hk.type === 'prompt' && hk.prompt?.includes('.claude/docs/'))
+    );
+    expect(docUpdateHook).toBeDefined();
+    expect(docUpdateHook!.hooks[0].prompt).toContain('architectural decision');
+    expect(docUpdateHook!.hooks[0].prompt).toContain("don't add noise");
   });
 });
 
