@@ -57,6 +57,7 @@ export async function writeTasksFile(
       scoring: t.scoring,
       ...(t.rubric ? { rubric: t.rubric } : {}),
       timeout: t.timeout,
+      ...(t.category ? { category: t.category } : {}),
     })),
   };
 

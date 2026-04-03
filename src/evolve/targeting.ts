@@ -76,6 +76,9 @@ const TEMPLATE_ASPECTS: Record<EvalTemplate, HarnessAspect[]> = {
   'config-change': ['settings', 'mcp'],
   'documentation': ['general'],
   'persistence-completion': ['commands', 'verification'],
+  'real-bug-fix': ['general'],
+  'real-feature-add': ['general'],
+  'codebase-question': ['general'],
 };
 
 /**
