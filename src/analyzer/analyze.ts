@@ -27,7 +27,7 @@ import {
   isCacheValid,
 } from './cache.js';
 import { callLLM } from '../llm.js';
-import type { ProjectProfile } from '../scanner/scan.js';
+import type { ProjectProfile, LanguageDetection } from '../scanner/scan.js';
 import type { KairnConfig } from '../types.js';
 
 // --- LLM output shape validators ---
@@ -57,6 +57,36 @@ function isConfigKey(v: unknown): v is ConfigKey {
 function validateArray<T>(raw: unknown, guard: (v: unknown) => v is T): T[] {
   if (!Array.isArray(raw)) return [];
   return raw.filter(guard);
+}
+
+/**
+ * Scope a sampling strategy's patterns to specific subdirectories.
+ *
+ * When a language is detected in subdirectories (not root), its generic domain
+ * patterns (e.g., `src/`, `models/`) need to be prefixed with the subdirectory
+ * path so they match the correct files in a monorepo. Exclude patterns are kept
+ * global since they use `**` globs.
+ *
+ * @param strategy - The resolved sampling strategy.
+ * @param subdirs - Subdirectories where this language was detected. Empty = root level (no scoping).
+ * @returns The scoped strategy, or the original strategy if subdirs is empty.
+ */
+export function scopeStrategyToSubdirs(strategy: SamplingStrategy, subdirs: string[]): SamplingStrategy {
+  if (subdirs.length === 0) return strategy;
+
+  return {
+    ...strategy,
+    entryPoints: subdirs.flatMap(dir =>
+      strategy.entryPoints.map(ep => `${dir}/${ep}`),
+    ),
+    domainPatterns: subdirs.flatMap(dir =>
+      strategy.domainPatterns.map(dp => `${dir}/${dp}`),
+    ),
+    configPatterns: subdirs.flatMap(dir =>
+      strategy.configPatterns.map(cp => `${dir}/${cp}`),
+    ),
+    // excludePatterns: keep global (they use ** globs)
+  };
 }
 
 /**
@@ -135,12 +165,23 @@ export async function analyzeProject(
     }
   }
 
-  // 2. Get strategies for all detected languages, resolve each, then merge
-  const strategies = profile.languages
-    .map(lang => getStrategy(lang))
-    .filter((s): s is SamplingStrategy => s !== null);
+  // 2. Get strategies for all detected languages, resolve each with subdirectory scoping, then merge
+  //    When languageLocations is available, use it to scope patterns to the correct subdirectories.
+  //    Fall back to languages array for backward compatibility with older profiles.
+  const languageLocations: LanguageDetection[] = profile.languageLocations
+    ?? profile.languages.map(lang => ({ language: lang, subdirs: [] as string[] }));
 
-  if (strategies.length === 0) {
+  const resolvedStrategies = await Promise.all(
+    languageLocations.map(async ({ language, subdirs }) => {
+      const base = getStrategy(language);
+      if (!base) return null;
+      const enriched = await resolveStrategy(dir, base, profile.framework, profile.scripts);
+      return scopeStrategyToSubdirs(enriched, subdirs);
+    }),
+  );
+  const validStrategies = resolvedStrategies.filter((s): s is SamplingStrategy => s !== null);
+
+  if (validStrategies.length === 0) {
     throw new AnalysisError(
       `No sampling strategy for languages: ${profile.languages.join(', ') || 'none detected'}`,
       'no_entry_point',
@@ -148,10 +189,7 @@ export async function analyzeProject(
     );
   }
 
-  const resolved = await Promise.all(
-    strategies.map(s => resolveStrategy(dir, s, profile.framework, profile.scripts)),
-  );
-  const strategy = mergeStrategies(resolved);
+  const strategy = mergeStrategies(validStrategies);
 
   // 3. Build include patterns from enriched strategy
   const include = [

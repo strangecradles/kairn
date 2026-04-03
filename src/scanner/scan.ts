@@ -1,6 +1,14 @@
 import fs from "fs/promises";
 import path from "path";
 
+/** Tracks which subdirectories a language was detected in. */
+export interface LanguageDetection {
+  /** Language name (e.g., 'Python', 'TypeScript'). */
+  language: string;
+  /** Subdirectories where this language was found. Empty = detected at root level. */
+  subdirs: string[];
+}
+
 export interface ProjectProfile {
   // Core identity
   name: string;
@@ -10,6 +18,7 @@ export interface ProjectProfile {
   // Language & framework
   language: string | null;
   languages: string[];
+  languageLocations?: LanguageDetection[];
   framework: string | null;
   typescript: boolean;
 
@@ -134,23 +143,30 @@ function detectLanguagesFromFiles(files: string[]): string[] {
 }
 
 /**
- * Detect all languages present in the project.
+ * Detect all languages present in the project, tracking which subdirectories
+ * each language was found in.
  *
- * First checks root files and collects ALL matching languages (sorted by
- * LANGUAGE_SIGNALS precedence order). If the root has no signal files
- * (common in monorepos), falls back to scanning immediate subdirectories
- * and returns all languages found, sorted by frequency (most common first).
- * Ties in frequency are broken by LANGUAGE_SIGNALS precedence order.
+ * Root-level detections return entries with `subdirs: []` (no scoping needed).
+ * Subdirectory-level detections track which subdirectories contain each language,
+ * enabling monorepo-aware domain pattern scoping.
  *
- * @returns Deduplicated array of language names, or empty array if none found.
+ * Results are sorted: root detections by LANGUAGE_SIGNALS precedence; subdirectory
+ * detections by frequency descending, then precedence ascending for ties.
+ *
+ * @returns Array of LanguageDetection entries, or empty array if none found.
  */
-async function detectLanguages(dir: string, keyFiles: string[]): Promise<string[]> {
+export async function detectLanguageLocations(dir: string, keyFiles: string[]): Promise<LanguageDetection[]> {
   const rootHits = detectLanguagesFromFiles(keyFiles);
-  if (rootHits.length > 0) return rootHits;
+  if (rootHits.length > 0) {
+    // Root-level detection: each language gets subdirs: [] (no scoping)
+    return rootHits.map(language => ({ language, subdirs: [] }));
+  }
 
-  // Monorepo fallback: scan one level of subdirectories
+  // Monorepo fallback: scan one level of subdirectories, track which dirs have each language
   const entries = await listDirSafe(dir);
+  const langSubdirs = new Map<string, string[]>();
   const counts = new Map<string, number>();
+
   for (const entry of entries) {
     const subPath = path.join(dir, entry);
     try {
@@ -163,6 +179,12 @@ async function detectLanguages(dir: string, keyFiles: string[]): Promise<string[
     const subLangs = detectLanguagesFromFiles(subFiles);
     for (const lang of subLangs) {
       counts.set(lang, (counts.get(lang) ?? 0) + 1);
+      const existing = langSubdirs.get(lang);
+      if (existing) {
+        existing.push(entry);
+      } else {
+        langSubdirs.set(lang, [entry]);
+      }
     }
   }
   if (counts.size === 0) return [];
@@ -180,7 +202,10 @@ async function detectLanguages(dir: string, keyFiles: string[]): Promise<string[
       if (freqDiff !== 0) return freqDiff;
       return (precedence.get(a[0]) ?? 999) - (precedence.get(b[0]) ?? 999);
     })
-    .map(([lang]) => lang);
+    .map(([lang]) => ({
+      language: lang,
+      subdirs: langSubdirs.get(lang) ?? [],
+    }));
 }
 
 function extractEnvKeys(content: string): string[] {
@@ -211,8 +236,9 @@ export async function scanProject(dir: string): Promise<ProjectProfile> {
     ].includes(f)
   );
 
-  // Detect language & framework
-  const detectedLanguages = await detectLanguages(dir, keyFiles);
+  // Detect language & framework (with subdirectory tracking)
+  const languageLocations = await detectLanguageLocations(dir, keyFiles);
+  const detectedLanguages = languageLocations.map(d => d.language);
   const language = detectedLanguages[0] ?? null;
   const framework = detectFramework(allDeps);
   const typescript = keyFiles.includes("tsconfig.json") || allDeps.includes("typescript");
@@ -291,6 +317,7 @@ export async function scanProject(dir: string): Promise<ProjectProfile> {
     directory: dir,
     language,
     languages: detectedLanguages,
+    languageLocations,
     framework,
     typescript,
     dependencies: deps,
