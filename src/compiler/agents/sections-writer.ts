@@ -16,10 +16,29 @@ const SECTIONS_SYSTEM_PROMPT = `You are the Kairn sections writer. Generate CLAU
 
 You will receive a project description and a list of section IDs to generate. Each section should be well-structured markdown.
 
+## CRITICAL: CLAUDE.md must be UNDER 80 LINES total.
+Long CLAUDE.md files (200+ lines) degrade instruction adherence. Keep it SHORT.
+Only these sections belong in CLAUDE.md (inline):
+- purpose: 3-5 lines. Project name, one-sentence description, core value prop.
+- commands: 5-10 lines. COMPRESSED one-liners for build/dev/test. No comments.
+- dataflow: 1-2 lines. Single-line data flow summary.
+- references: 3-5 lines. Pointers to docs/ files ("See docs/ARCHITECTURE.md for...")
+
+All other sections are generated but MARKED for docs/ placement:
+- tech-stack → docs/ARCHITECTURE.md
+- architecture → docs/ARCHITECTURE.md
+- output → docs/ARCHITECTURE.md
+- conventions → docs/CONVENTIONS.md
+- engineering-standards → docs/CONVENTIONS.md
+- git-workflow → docs/CONVENTIONS.md
+- verification → docs/VERIFICATION.md
+- gotchas → docs/VERIFICATION.md
+- debugging → docs/VERIFICATION.md
+
 ## Standard Sections (generate those requested)
-- purpose: Project purpose and goals (## Purpose heading, but use project-specific title like "# ProjectName Development")
+- purpose: Project purpose and goals (use "# ProjectName Development" heading)
 - tech-stack: Languages, frameworks, tools (## Tech Stack)
-- commands: Build/dev/test commands (## Commands, use code blocks)
+- commands: Build/dev/test commands (## Quick Commands, code block, one-liners only)
 - architecture: Project structure (## Architecture, use code blocks for tree)
 - conventions: Coding conventions (## Conventions, bullet points)
 - key-commands: Slash commands reference (## Key Commands, bullet list)
@@ -31,16 +50,19 @@ You will receive a project description and a list of section IDs to generate. Ea
 - engineering-standards: Code quality standards (## Engineering Standards)
 
 ## Rules
-- Each section: 5-20 lines of content
+- INLINE sections (purpose, commands, dataflow, references): 3-10 lines each. MAXIMUM.
+- DOCS sections (everything else): 10-30 lines each. Be thorough here.
 - Use project-specific details, not generic advice
 - Markdown formatting: headers, bullets, code blocks
-- Be concise but informative
+- Set the "target" field to "claudemd" for inline sections, "docs" for docs sections
 
 ## Output Format
-Return a JSON array:
+Return a JSON array. Each item MUST include a "target" field:
 [
-  { "id": "purpose", "heading": "# ProjectName Development", "content": "..." },
-  { "id": "tech-stack", "heading": "## Tech Stack", "content": "..." }
+  { "id": "purpose", "heading": "# ProjectName Development", "content": "...", "target": "claudemd" },
+  { "id": "commands", "heading": "## Quick Commands", "content": "...", "target": "claudemd" },
+  { "id": "tech-stack", "heading": "## Tech Stack", "content": "...", "target": "docs" },
+  { "id": "architecture", "heading": "## Architecture", "content": "...", "target": "docs" }
 ]`;
 
 /**
@@ -139,11 +161,13 @@ function parseSectionsResponse(text: string): Section[] {
 
   return parsed.map((item: unknown, index: number) => {
     const obj = item as Record<string, unknown>;
+    const target = obj.target === 'docs' ? 'docs' as const : 'claudemd' as const;
     return createSection(
       String(obj.id ?? `section-${index}`),
       String(obj.heading ?? ''),
       String(obj.content ?? ''),
       index,
+      target,
     );
   });
 }

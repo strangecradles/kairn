@@ -27,12 +27,14 @@ export interface HarnessMeta {
 // Content nodes
 // ---------------------------------------------------------------------------
 
-/** A heading-delimited section inside CLAUDE.md. */
+/** A heading-delimited section inside CLAUDE.md or docs/. */
 export interface Section {
   id: string;
   heading: string;
   content: string;
   order: number;
+  /** Where this section should be rendered: 'claudemd' (inline in CLAUDE.md) or 'docs' (separate file in docs/). */
+  target?: 'claudemd' | 'docs';
 }
 
 /** A file under `.claude/commands/`. */
@@ -190,8 +192,9 @@ export function createSection(
   heading: string,
   content: string,
   order: number,
+  target?: 'claudemd' | 'docs',
 ): Section {
-  return { id, heading, content, order };
+  return { id, heading, content, order, target };
 }
 
 /** Convenience factory for CommandNode with an optional description (defaults to empty string). */

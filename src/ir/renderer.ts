@@ -50,7 +50,9 @@ export function renderClaudeMd(
   commands?: Array<{ name: string; description: string }>,
   envVars?: Array<{ name: string; description: string }>,
 ): string {
-  const sorted = [...sections].sort((a, b) => a.order - b.order);
+  // Only render sections targeted at CLAUDE.md (or untagged for backward compat)
+  const inlineSections = sections.filter(s => s.target !== 'docs');
+  const sorted = [...inlineSections].sort((a, b) => a.order - b.order);
 
   const blocks: string[] = [];
 

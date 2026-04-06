@@ -98,14 +98,19 @@ evolveCommand
       const workspace = await createEvolveWorkspace(projectRoot, DEFAULT_CONFIG);
       console.log(ui.success('Created .kairn-evolve/ workspace'));
 
-      // Auto-generate tasks via LLM
+      // Auto-generate tasks via LLM (with 90s timeout)
       const spinner = ora('Generating project-specific eval tasks...').start();
       let tasks: Task[];
       try {
-        tasks = await autoGenerateTasks(projectRoot, options.workflow);
+        const taskGenPromise = autoGenerateTasks(projectRoot, options.workflow);
+        const timeoutPromise = new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error('Task generation timed out after 90s. Check your API key with `kairn init`.')), 90_000)
+        );
+        tasks = await Promise.race([taskGenPromise, timeoutPromise]);
         spinner.succeed(`Generated ${tasks.length} eval tasks`);
-      } catch {
-        spinner.fail('LLM task generation failed');
+      } catch (err) {
+        const errMsg = err instanceof Error ? err.message : String(err);
+        spinner.fail(`LLM task generation failed: ${errMsg}`);
         // Fallback to template-based placeholder tasks
         const templateIds = selectTemplatesForWorkflow(options.workflow);
         tasks = templateIds.map((templateId, index) => ({

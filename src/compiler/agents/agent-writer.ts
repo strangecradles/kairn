@@ -39,6 +39,11 @@ Each agent file uses YAML frontmatter followed by Markdown persona content.
   - \`escalateTo\`: higher tier to escalate to ("sonnet" or "opus")
   - \`escalateWhen\`: description of when to escalate
 
+## Agent Count Limit
+Generate AT MOST 8 agents. If asked to generate more, merge overlapping roles.
+Common merges: e2e-tester + integration-tester → integration-tester, linter duties belong in hooks not agents.
+6-8 well-scoped agents is the sweet spot. More creates routing ambiguity.
+
 ## Persona Design Principles
 - Each agent has a clear, focused role (single responsibility)
 - Persona should describe expertise, approach, and boundaries
