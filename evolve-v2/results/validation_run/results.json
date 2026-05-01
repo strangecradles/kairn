@@ -1,0 +1,286 @@
+{
+  "generations": [
+    {
+      "gen": 0,
+      "best": "baseline",
+      "score": 81.27850877192982,
+      "tasks": [
+        "hello-api",
+        "csv-to-json",
+        "fix-json-parser",
+        "sqlite-todo",
+        "log-analyzer",
+        "data-pipeline",
+        "config-validator",
+        "test-suite-repair",
+        "concurrent-kv",
+        "regex-engine",
+        "diff-algorithm",
+        "expr-compiler"
+      ],
+      "variants": {
+        "baseline": {
+          "avg": 81.27850877192982,
+          "tasks": {
+            "hello-api": {
+              "score": 55.13157894736842,
+              "cps": {
+                "file-exists": true,
+                "server-runs": false,
+                "hello-works": false,
+                "done-marker": true
+              },
+              "turns": 4,
+              "cost": 0.0806145,
+              "self_report": "`server.py` already exists and is complete \u2014 all three requirements are met (port 8080, `/hello` \u2192 `{\"message\": \"hello world\"}`, `/health` \u2192 `{\"status\": \"ok\"}`, both with `Content-Type: application/js"
+            },
+            "csv-to-json": {
+              "score": 96.84210526315789,
+              "cps": {
+                "file-exists": true,
+                "runs": true,
+                "valid-json": true,
+                "correct-count": true,
+                "quoted-commas": true
+              },
+              "turns": 5,
+              "cost": 0.08027909999999999,
+              "self_report": "The workspace's `.claude/CLAUDE.md` specifies code quality and testing guidance but gives no instruction on **output format expectations** \u2014 whether `output.json` should use `csv.DictReader` vs manual"
+            },
+            "fix-json-parser": {
+              "score": 94.47368421052632,
+              "cps": {
+                "preserved": true,
+                "basic-ok": true,
+                "unicode": true,
+                "scientific": true,
+                "trailing-comma": true
+              },
+              "turns": 8,
+              "cost": 0.13401090000000002,
+              "self_report": "The workspace `.claude/CLAUDE.md` is entirely generic \u2014 it gives no indication of Python version, whether a test file or test runner exists, or what \"don't rewrite from scratch\" means in practice (pre"
+            },
+            "sqlite-todo": {
+              "score": 98.42105263157895,
+              "cps": {
+                "exists": true,
+                "add": true,
+                "list": true,
+                "complete": true,
+                "search": true
+              },
+              "turns": 3,
+              "cost": 0.09336675,
+              "self_report": "The CLAUDE.md says \"verify manually if no tests provided\" but gives no concrete definition of what manual verification looks like for a CLI app \u2014 a checklist of commands to run (e.g., round-trip add\u2192l"
+            },
+            "log-analyzer": {
+              "score": 99.21052631578947,
+              "cps": {
+                "exists": true,
+                "runs": true,
+                "valid-json": true,
+                "total-ok": true,
+                "found-attacker": true
+              },
+              "turns": 2,
+              "cost": 0.0661041,
+              "self_report": "The workspace CLAUDE.md (`evolve-v2/workspaces/ev_log-analyzer_3x4d5vsp/.claude/CLAUDE.md`) gives general coding guidance but says nothing about the log format \u2014 what fields `access.log` contains, wha"
+            },
+            "data-pipeline": {
+              "score": 94.47368421052632,
+              "cps": {
+                "exists": true,
+                "runs": true,
+                "db-tables": true,
+                "clean-data": true,
+                "revenue": true
+              },
+              "turns": 8,
+              "cost": 0.14907285,
+              "self_report": "The workspace `.claude/CLAUDE.md` is generic project-assistant boilerplate \u2014 it says nothing about the specific pipeline task, expected schema for `sales.csv`, or the target database structure. The mo"
+            },
+            "config-validator": {
+              "score": 78.26315789473685,
+              "cps": {
+                "exists": true,
+                "valid-passes": true,
+                "invalid-fails": false,
+                "bad-name": true,
+                "bad-port": true
+              },
+              "turns": 7,
+              "cost": 0.10008029999999998,
+              "self_report": "Two gaps stand out: the CLAUDE.md says \"verify manually if no tests provided\" but gives no guidance on *what* constitutes sufficient manual verification for a CLI tool (e.g., what test cases to run, w"
+            },
+            "test-suite-repair": {
+              "score": 96.05263157894737,
+              "cps": {
+                "tests-exist": true,
+                "pytest-runs": true,
+                "all-pass": true,
+                "no-skip": true
+              },
+              "turns": 6,
+              "cost": 0.0862173,
+              "self_report": "The workspace CLAUDE.md has no guidance on the common ambiguity of **which file is authoritative** when a test and implementation diverge \u2014 a rule like \"assume the implementation is correct unless exp"
+            },
+            "concurrent-kv": {
+              "score": 96.84210526315789,
+              "cps": {
+                "exists": true,
+                "basic": true,
+                "persist": true,
+                "concurrent": true,
+                "prefix": true
+              },
+              "turns": 5,
+              "cost": 0.1246644,
+              "self_report": "The workspace CLAUDE.md says \"thread-safe\" as a quality requirement but gives no implementation guidance \u2014 specifically, it doesn't clarify whether thread safety should be achieved via a single `threa"
+            },
+            "regex-engine": {
+              "score": 0.0,
+              "cps": {
+                "exists": false,
+                "literals": false,
+                "quantifiers": false,
+                "char-class": false,
+                "alternation": false
+              },
+              "turns": 0,
+              "cost": 0,
+              "self_report": "The workspace CLAUDE.md is entirely generic \u2014 it says nothing about the regex engine task itself (required features, expected behavior, edge case priorities, or test format). The biggest gap was the a"
+            },
+            "diff-algorithm": {
+              "score": 73.52631578947368,
+              "cps": {
+                "exists": true,
+                "runs": false,
+                "additions": true,
+                "removals": true,
+                "identical": true
+              },
+              "turns": 13,
+              "cost": 0.51047265,
+              "self_report": "The `.claude/CLAUDE.md` is a generic project template with no task-specific guidance \u2014 it says nothing about the diff algorithm, the expected output format spec, or Python version/stdlib constraints. "
+            },
+            "expr-compiler": {
+              "score": 92.10526315789474,
+              "cps": {
+                "exists": true,
+                "runs": true,
+                "arithmetic": true,
+                "functions": true,
+                "conditionals": true
+              },
+              "turns": 11,
+              "cost": 0.2906295,
+              "self_report": "The workspace CLAUDE.md is a generic template with no task-specific context \u2014 it gives no language spec for `.expr` (operator precedence, scoping rules, fn recursion support, error behavior), and no d"
+            }
+          }
+        }
+      }
+    },
+    {
+      "gen": 1,
+      "best": "exploit_2",
+      "score": 87.49122807017544,
+      "tasks": [
+        "csv-to-json",
+        "diff-algorithm",
+        "regex-engine"
+      ],
+      "variants": {
+        "exploit_2": {
+          "avg": 87.49122807017544,
+          "tasks": {
+            "csv-to-json": {
+              "score": 96.84210526315789,
+              "cps": {
+                "file-exists": true,
+                "runs": true,
+                "valid-json": true,
+                "correct-count": true,
+                "quoted-commas": true
+              },
+              "turns": 5,
+              "cost": 0.08299094999999998,
+              "self_report": "The workspace CLAUDE.md is strong on *process* (create file immediately, iterate, test) but silent on *task-specific constraints*: it doesn't specify whether to use the stdlib `csv` module or allow th"
+            },
+            "diff-algorithm": {
+              "score": 80.63157894736842,
+              "cps": {
+                "exists": true,
+                "runs": false,
+                "additions": true,
+                "removals": true,
+                "identical": true
+              },
+              "turns": 4,
+              "cost": 0.25196654999999996,
+              "self_report": "The CLAUDE.md is process-focused but says nothing about the algorithm domain itself \u2014 it doesn't clarify whether \"Myers or similar\" means a strict LCS-based approach or whether a simpler patience/hist"
+            },
+            "regex-engine": {
+              "score": 85.0,
+              "cps": {
+                "exists": true,
+                "literals": true,
+                "quantifiers": true,
+                "char-class": true,
+                "alternation": true
+              },
+              "turns": 0,
+              "cost": 0,
+              "self_report": "The workspace CLAUDE.md is a generic task template with no domain-specific guidance \u2014 it says nothing about regex semantics, so the key ambiguity was whether `match()` should behave like `re.match` (p"
+            }
+          }
+        },
+        "exploit": {
+          "avg": 70.75438596491227,
+          "tasks": {
+            "csv-to-json": {
+              "score": 96.84210526315789,
+              "cps": {
+                "file-exists": true,
+                "runs": true,
+                "valid-json": true,
+                "correct-count": true,
+                "quoted-commas": true
+              },
+              "turns": 5,
+              "cost": 0.08307615,
+              "self_report": "The workspace `CLAUDE.md` at `/Users/ashtonperlroth/Projects/kairn-v2/evolve-v2/workspaces/ev_csv-to-json_obsskx9d/.claude/CLAUDE.md` is strong on *verification protocol* but silent on the *task itsel"
+            },
+            "diff-algorithm": {
+              "score": 17.0,
+              "cps": {
+                "exists": false,
+                "runs": false,
+                "additions": false,
+                "removals": false,
+                "identical": true
+              },
+              "turns": 0,
+              "cost": 0,
+              "self_report": "The workspace CLAUDE.md focuses heavily on *how* to verify (run it, curl it, check outputs) but says nothing about *what* constitutes a correct unified diff \u2014 specifically, the exact header format (`-"
+            },
+            "regex-engine": {
+              "score": 98.42105263157895,
+              "cps": {
+                "exists": true,
+                "literals": true,
+                "quantifiers": true,
+                "char-class": true,
+                "alternation": true
+              },
+              "turns": 3,
+              "cost": 0.44452890000000006,
+              "self_report": "The CLAUDE.md is strong on *process* (verify by execution, checklist) but silent on *scope boundaries* \u2014 it doesn't clarify whether the regex engine should be a standalone module, importable library, "
+            }
+          }
+        }
+      }
+    }
+  ],
+  "timestamp": "2026-04-07T22:40:27.563625",
+  "best_claude_md": "# Project Assistant\n\n## RULE #1: Create the Deliverable File Immediately\nWithin your first few actions, CREATE the main deliverable file with at least a minimal working skeleton. Do NOT spend time planning without producing code. The pattern is:\n1. Read the task\n2. CREATE the file with a basic working implementation (even if incomplete)\n3. Iterate and improve until all requirements are met\n4. Test and verify\n\nA file that exists with partial functionality scores higher than no file at all. NEVER finish a task without creating the required output file.\n\n## Approach\n1. Read the task \u2014 identify the main output file(s) required\n2. Check existing files for context\n3. IMMEDIATELY create the output file with a working skeleton\n4. Build up functionality incrementally\n5. Test after each major addition\n6. Final verification before marking done\n\n## Code Quality\n- Clean variable names, comments for complex logic\n- Handle edge cases and errors\n- Follow language conventions (PEP 8 for Python, etc.)\n- Keep functions focused\n\n## Testing & Verification\n- ALWAYS run your code before claiming it works\n- Run tests if a test file exists\n- If no tests, manually verify with representative inputs\n- For servers: start them and test endpoints with actual HTTP requests\n- For CLI tools: run with sample arguments\n- Read error messages carefully \u2014 fix root cause, not symptoms\n\n## Implementation Strategy\n- Start with the simplest working version, then add complexity\n- For complex tasks (parsers, engines, compilers):\n  1. Implement the core/basic case first\n  2. Add each feature one at a time\n  3. Test after each addition\n- Never get stuck in design \u2014 write code, then refactor\n- If a task has 5 features, implement them in order of importance\n\n## Problem Solving\n- Break complex problems into smaller steps\n- Check intermediate results\n- If stuck for more than a minute, simplify your approach and write SOMETHING\n- A working simple solution beats a non-existent complex one"
+}

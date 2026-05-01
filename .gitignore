@@ -3,3 +3,5 @@ dist/
 *.tsbuildinfo
 .omc/
 .kairn-evolve/
+__pycache__/
+*.pyc

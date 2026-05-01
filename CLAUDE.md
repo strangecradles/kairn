@@ -7,7 +7,3 @@ Key files:
 - `CHANGELOG.md` — release history
 - `.claude/` — development environment (commands, rules, settings)
 
-Internal docs (not in this repo):
-- `~/Projects/kairn-internal/SPEC.md` — product spec + business model
-- `~/Projects/kairn-internal/RESEARCH.md` — ecosystem research
-- `~/Projects/kairn-internal/PLAN.md` — implementation plan

@@ -1,0 +1,186 @@
+{
+  "generations": [
+    {
+      "gen": 0,
+      "best": "baseline",
+      "score": 88.62500000000001,
+      "tasks": [
+        "hello-api",
+        "csv-to-json",
+        "fix-json-parser",
+        "sqlite-todo",
+        "log-analyzer",
+        "data-pipeline",
+        "config-validator",
+        "test-suite-repair",
+        "concurrent-kv",
+        "regex-engine",
+        "diff-algorithm",
+        "expr-compiler"
+      ],
+      "variants": {
+        "baseline": {
+          "avg": 88.62500000000001,
+          "tasks": {
+            "hello-api": {
+              "score": 54.34210526315789,
+              "cps": {
+                "file-exists": true,
+                "server-runs": false,
+                "hello-works": false,
+                "done-marker": true
+              },
+              "turns": 5,
+              "cost": 0.09784005,
+              "self_report": "`server.py` is already complete. Here's what it implements:\n\n- **Port 8080** \u2014 `HTTPServer((\"\", 8080), ...)`\n- **GET /hello** \u2014 returns `{\"message\": \"hello world\"}` with `Content-Type: application/jso"
+            },
+            "csv-to-json": {
+              "score": 96.84210526315789,
+              "cps": {
+                "file-exists": true,
+                "runs": true,
+                "valid-json": true,
+                "correct-count": true,
+                "quoted-commas": true
+              },
+              "turns": 5,
+              "cost": 0.11669295000000002,
+              "self_report": "The CLAUDE.md is entirely generic \u2014 it says nothing about the specific task (CSV\u2192JSON), so I had no guidance on input file encoding, delimiter assumptions, or whether to use stdlib `csv` vs. third-par"
+            },
+            "fix-json-parser": {
+              "score": 92.89473684210526,
+              "cps": {
+                "preserved": true,
+                "basic-ok": true,
+                "unicode": true,
+                "scientific": true,
+                "trailing-comma": true
+              },
+              "turns": 10,
+              "cost": 0.1568553,
+              "self_report": "The workspace `.claude/CLAUDE.md` gives only generic advice (\"handle edge cases,\" \"follow PEP 8\") with no context about the JSON parser's architecture \u2014 e.g., whether it uses a recursive descent appro"
+            },
+            "sqlite-todo": {
+              "score": 98.42105263157895,
+              "cps": {
+                "exists": true,
+                "add": true,
+                "list": true,
+                "complete": true,
+                "search": true
+              },
+              "turns": 3,
+              "cost": 0.09005325,
+              "self_report": "The workspace CLAUDE.md is entirely generic \u2014 it gives process advice (\"plan before coding\", \"follow PEP 8\") but says nothing specific to this task: no preferred CLI library (argparse vs. click), no e"
+            },
+            "log-analyzer": {
+              "score": 99.21052631578947,
+              "cps": {
+                "exists": true,
+                "runs": true,
+                "valid-json": true,
+                "total-ok": true,
+                "found-attacker": true
+              },
+              "turns": 2,
+              "cost": 0.07098915,
+              "self_report": "Two gaps stood out:\n\n1. **No log format definition.** The CLAUDE.md says \"read the task carefully\" but never specifies the `access.log` schema (Apache combined? Nginx? custom?). A note like \"logs foll"
+            },
+            "data-pipeline": {
+              "score": 95.26315789473684,
+              "cps": {
+                "exists": true,
+                "runs": true,
+                "db-tables": true,
+                "clean-data": true,
+                "revenue": true
+              },
+              "turns": 7,
+              "cost": 0.1393725,
+              "self_report": "The CLAUDE.md was almost entirely generic process guidance \u2014 it said nothing about the actual task domain (ETL pipelines, SQLite schema conventions, CSV validation rules) or the expected workspace inp"
+            },
+            "config-validator": {
+              "score": 78.26315789473685,
+              "cps": {
+                "exists": true,
+                "valid-passes": true,
+                "invalid-fails": false,
+                "bad-name": true,
+                "bad-port": true
+              },
+              "turns": 7,
+              "cost": 0.09871080000000002,
+              "self_report": "The workspace CLAUDE.md is entirely generic boilerplate \u2014 it says nothing about the task's constraints: whether PyYAML or other dependencies are available, what Python version to target, or what stdli"
+            },
+            "test-suite-repair": {
+              "score": 96.05263157894737,
+              "cps": {
+                "tests-exist": true,
+                "pytest-runs": true,
+                "all-pass": true,
+                "no-skip": true
+              },
+              "turns": 6,
+              "cost": 0.13290615,
+              "self_report": "The verification gate in CLAUDE.md prescribes `npm run build`, `npm run typecheck`, and `npm test` \u2014 all TypeScript/Node.js commands that don't apply to a Python workspace, creating ambiguity about wh"
+            },
+            "concurrent-kv": {
+              "score": 95.26315789473684,
+              "cps": {
+                "exists": true,
+                "basic": true,
+                "persist": true,
+                "concurrent": true,
+                "prefix": true
+              },
+              "turns": 7,
+              "cost": 0.21315405,
+              "self_report": "The workspace CLAUDE.md is entirely generic \u2014 it says \"Follow PEP 8\" and \"handle edge cases\" but gives no guidance on SQLite threading model preferences (WAL mode, per-thread connections vs. a shared "
+            },
+            "regex-engine": {
+              "score": 92.10526315789474,
+              "cps": {
+                "exists": true,
+                "literals": true,
+                "quantifiers": true,
+                "char-class": true,
+                "alternation": true
+              },
+              "turns": 11,
+              "cost": 0.36289125,
+              "self_report": "The CLAUDE.md says nothing about the *scope* of the task \u2014 there's no mention of what features the regex engine must support, what the expected function signature is, or what \"done\" looks like. Guidan"
+            },
+            "diff-algorithm": {
+              "score": 68.0,
+              "cps": {
+                "exists": true,
+                "runs": false,
+                "additions": true,
+                "removals": true,
+                "identical": true
+              },
+              "turns": 0,
+              "cost": 0,
+              "self_report": "The workspace `.claude/CLAUDE.md` is entirely generic (\"Project Assistant\") \u2014 it contains no task-specific context, so it provided no useful guidance for this task. Everything I had to work from was i"
+            },
+            "expr-compiler": {
+              "score": 96.84210526315789,
+              "cps": {
+                "exists": true,
+                "runs": true,
+                "arithmetic": true,
+                "functions": true,
+                "conditionals": true
+              },
+              "turns": 5,
+              "cost": 0.1397991,
+              "self_report": "The workspace `.claude/CLAUDE.md` is generic boilerplate with no domain context \u2014 it says nothing about the `.expr` language spec, expected test file names/contents, or what \"must handle\" actually mea"
+            }
+          }
+        }
+      }
+    }
+  ],
+  "timestamp": "2026-04-07T21:57:20.892819",
+  "best_claude_md": "# Project Assistant\n\n## Approach\n1. Read the task carefully before writing any code\n2. Check what files already exist in the workspace\n3. Plan your approach, then implement\n4. Test your solution before finishing\n\n## Code Quality\n- Clean variable names, comments for complex logic\n- Handle edge cases and errors\n- Follow PEP 8 for Python\n- Keep functions focused\n\n## Testing\n- Run tests if a test file exists\n- Verify manually if no tests provided\n- Read error messages carefully when tests fail\n\n## Problem Solving\n- Break complex problems into smaller steps\n- Check intermediate results\n- If stuck, re-read the requirements\n"
+}

@@ -1,0 +1,849 @@
+{
+  "generations": [
+    {
+      "gen": 0,
+      "best": "baseline",
+      "score": 75.17214912280703,
+      "tasks": [
+        "hello-api",
+        "csv-to-json",
+        "fix-json-parser",
+        "sqlite-todo",
+        "log-analyzer",
+        "data-pipeline",
+        "config-validator",
+        "test-suite-repair",
+        "concurrent-kv",
+        "regex-engine",
+        "diff-algorithm",
+        "expr-compiler"
+      ],
+      "variants": {
+        "baseline": {
+          "avg": 75.17214912280703,
+          "tasks": {
+            "hello-api": {
+              "score": 76.38157894736841,
+              "cps": {
+                "file-exists": true,
+                "server-runs": true,
+                "hello-works": true,
+                "done-marker": false
+              },
+              "turns": 4,
+              "cost": 0.592,
+              "self_report": "Mock self-report for hello-api"
+            },
+            "csv-to-json": {
+              "score": 94.47368421052632,
+              "cps": {
+                "file-exists": true,
+                "runs": true,
+                "valid-json": true,
+                "correct-count": true,
+                "quoted-commas": true
+              },
+              "turns": 8,
+              "cost": 0.279,
+              "self_report": "Mock self-report for csv-to-json"
+            },
+            "fix-json-parser": {
+              "score": 99.21052631578947,
+              "cps": {
+                "preserved": true,
+                "basic-ok": true,
+                "unicode": true,
+                "scientific": true,
+                "trailing-comma": true
+              },
+              "turns": 2,
+              "cost": 0.692,
+              "self_report": "Mock self-report for fix-json-parser"
+            },
+            "sqlite-todo": {
+              "score": 9.473684210526315,
+              "cps": {
+                "exists": false,
+                "add": false,
+                "list": false,
+                "complete": false,
+                "search": false
+              },
+              "turns": 8,
+              "cost": 0.913,
+              "self_report": "Mock self-report for sqlite-todo"
+            },
+            "log-analyzer": {
+              "score": 95.26315789473684,
+              "cps": {
+                "exists": true,
+                "runs": true,
+                "valid-json": true,
+                "total-ok": true,
+                "found-attacker": true
+              },
+              "turns": 7,
+              "cost": 0.855,
+              "self_report": "Mock self-report for log-analyzer"
+            },
+            "data-pipeline": {
+              "score": 81.42105263157895,
+              "cps": {
+                "exists": true,
+                "runs": true,
+                "db-tables": false,
+                "clean-data": true,
+                "revenue": true
+              },
+              "turns": 3,
+              "cost": 0.919,
+              "self_report": "Mock self-report for data-pipeline"
+            },
+            "config-validator": {
+              "score": 80.63157894736842,
+              "cps": {
+                "exists": true,
+                "valid-passes": true,
+                "invalid-fails": true,
+                "bad-name": false,
+                "bad-port": true
+              },
+              "turns": 4,
+              "cost": 0.248,
+              "self_report": "Mock self-report for config-validator"
+            },
+            "test-suite-repair": {
+              "score": 99.21052631578947,
+              "cps": {
+                "tests-exist": true,
+                "pytest-runs": true,
+                "all-pass": true,
+                "no-skip": true
+              },
+              "turns": 2,
+              "cost": 0.779,
+              "self_report": "Mock self-report for test-suite-repair"
+            },
+            "concurrent-kv": {
+              "score": 60.473684210526315,
+              "cps": {
+                "exists": true,
+                "basic": false,
+                "persist": false,
+                "concurrent": true,
+                "prefix": true
+              },
+              "turns": 8,
+              "cost": 0.113,
+              "self_report": "Mock self-report for concurrent-kv"
+            },
+            "regex-engine": {
+              "score": 63.63157894736842,
+              "cps": {
+                "exists": true,
+                "literals": false,
+                "quantifiers": true,
+                "char-class": true,
+                "alternation": false
+              },
+              "turns": 4,
+              "cost": 0.707,
+              "self_report": "Mock self-report for regex-engine"
+            },
+            "diff-algorithm": {
+              "score": 60.473684210526315,
+              "cps": {
+                "exists": false,
+                "runs": true,
+                "additions": false,
+                "removals": true,
+                "identical": true
+              },
+              "turns": 8,
+              "cost": 0.918,
+              "self_report": "Mock self-report for diff-algorithm"
+            },
+            "expr-compiler": {
+              "score": 81.42105263157895,
+              "cps": {
+                "exists": true,
+                "runs": true,
+                "arithmetic": true,
+                "functions": false,
+                "conditionals": true
+              },
+              "turns": 3,
+              "cost": 0.584,
+              "self_report": "Mock self-report for expr-compiler"
+            }
+          }
+        }
+      }
+    },
+    {
+      "gen": 1,
+      "best": "mock-v2",
+      "score": 86.16842105263157,
+      "tasks": [
+        "csv-to-json",
+        "diff-algorithm",
+        "expr-compiler",
+        "test-suite-repair",
+        "config-validator"
+      ],
+      "variants": {
+        "mock-v2": {
+          "avg": 86.16842105263157,
+          "tasks": {
+            "csv-to-json": {
+              "score": 97.63157894736841,
+              "cps": {
+                "file-exists": true,
+                "runs": true,
+                "valid-json": true,
+                "correct-count": true,
+                "quoted-commas": true
+              },
+              "turns": 4,
+              "cost": 0.81,
+              "self_report": "Mock self-report for csv-to-json"
+            },
+            "diff-algorithm": {
+              "score": 62.8421052631579,
+              "cps": {
+                "exists": true,
+                "runs": true,
+                "additions": false,
+                "removals": true,
+                "identical": false
+              },
+              "turns": 5,
+              "cost": 0.8,
+              "self_report": "Mock self-report for diff-algorithm"
+            },
+            "expr-compiler": {
+              "score": 78.26315789473685,
+              "cps": {
+                "exists": true,
+                "runs": true,
+                "arithmetic": true,
+                "functions": true,
+                "conditionals": false
+              },
+              "turns": 7,
+              "cost": 0.371,
+              "self_report": "Mock self-report for expr-compiler"
+            },
+            "test-suite-repair": {
+              "score": 96.84210526315789,
+              "cps": {
+                "tests-exist": true,
+                "pytest-runs": true,
+                "all-pass": true,
+                "no-skip": true
+              },
+              "turns": 5,
+              "cost": 0.919,
+              "self_report": "Mock self-report for test-suite-repair"
+            },
+            "config-validator": {
+              "score": 95.26315789473684,
+              "cps": {
+                "exists": true,
+                "valid-passes": true,
+                "invalid-fails": true,
+                "bad-name": true,
+                "bad-port": true
+              },
+              "turns": 7,
+              "cost": 0.443,
+              "self_report": "Mock self-report for config-validator"
+            }
+          }
+        },
+        "mock-v1": {
+          "avg": 76.22368421052633,
+          "tasks": {
+            "csv-to-json": {
+              "score": 79.8421052631579,
+              "cps": {
+                "file-exists": false,
+                "runs": true,
+                "valid-json": true,
+                "correct-count": true,
+                "quoted-commas": true
+              },
+              "turns": 5,
+              "cost": 0.956,
+              "self_report": "Mock self-report for csv-to-json"
+            },
+            "diff-algorithm": {
+              "score": 80.63157894736842,
+              "cps": {
+                "exists": true,
+                "runs": true,
+                "additions": true,
+                "removals": true,
+                "identical": false
+              },
+              "turns": 4,
+              "cost": 0.912,
+              "self_report": "Mock self-report for diff-algorithm"
+            },
+            "expr-compiler": {
+              "score": 78.26315789473685,
+              "cps": {
+                "exists": true,
+                "runs": true,
+                "arithmetic": true,
+                "functions": false,
+                "conditionals": true
+              },
+              "turns": 7,
+              "cost": 0.678,
+              "self_report": "Mock self-report for expr-compiler"
+            },
+            "test-suite-repair": {
+              "score": 77.17105263157895,
+              "cps": {
+                "tests-exist": true,
+                "pytest-runs": true,
+                "all-pass": false,
+                "no-skip": true
+              },
+              "turns": 3,
+              "cost": 0.847,
+              "self_report": "Mock self-report for test-suite-repair"
+            },
+            "config-validator": {
+              "score": 65.21052631578948,
+              "cps": {
+                "exists": true,
+                "valid-passes": false,
+                "invalid-fails": true,
+                "bad-name": true,
+                "bad-port": false
+              },
+              "turns": 2,
+              "cost": 0.873,
+              "self_report": "Mock self-report for config-validator"
+            }
+          }
+        },
+        "mock-v3": {
+          "avg": 75.59210526315789,
+          "tasks": {
+            "csv-to-json": {
+              "score": 78.26315789473685,
+              "cps": {
+                "file-exists": true,
+                "runs": true,
+                "valid-json": true,
+                "correct-count": true,
+                "quoted-commas": false
+              },
+              "turns": 7,
+              "cost": 0.792,
+              "self_report": "Mock self-report for csv-to-json"
+            },
+            "diff-algorithm": {
+              "score": 78.26315789473685,
+              "cps": {
+                "exists": true,
+                "runs": false,
+                "additions": true,
+                "removals": true,
+                "identical": true
+              },
+              "turns": 7,
+              "cost": 0.381,
+              "self_report": "Mock self-report for diff-algorithm"
+            },
+            "expr-compiler": {
+              "score": 65.21052631578948,
+              "cps": {
+                "exists": true,
+                "runs": true,
+                "arithmetic": false,
+                "functions": true,
+                "conditionals": false
+              },
+              "turns": 2,
+              "cost": 0.187,
+              "self_report": "Mock self-report for expr-compiler"
+            },
+            "test-suite-repair": {
+              "score": 74.01315789473684,
+              "cps": {
+                "tests-exist": true,
+                "pytest-runs": true,
+                "all-pass": false,
+                "no-skip": true
+              },
+              "turns": 7,
+              "cost": 0.47,
+              "self_report": "Mock self-report for test-suite-repair"
+            },
+            "config-validator": {
+              "score": 82.21052631578948,
+              "cps": {
+                "exists": true,
+                "valid-passes": false,
+                "invalid-fails": true,
+                "bad-name": true,
+                "bad-port": true
+              },
+              "turns": 2,
+              "cost": 0.557,
+              "self_report": "Mock self-report for config-validator"
+            }
+          }
+        }
+      }
+    },
+    {
+      "gen": 2,
+      "best": "mock-v1",
+      "score": 65.61052631578949,
+      "tasks": [
+        "csv-to-json",
+        "regex-engine",
+        "concurrent-kv",
+        "log-analyzer",
+        "config-validator"
+      ],
+      "variants": {
+        "mock-v3": {
+          "avg": 64.97894736842105,
+          "tasks": {
+            "csv-to-json": {
+              "score": 60.473684210526315,
+              "cps": {
+                "file-exists": true,
+                "runs": true,
+                "valid-json": false,
+                "correct-count": false,
+                "quoted-commas": true
+              },
+              "turns": 8,
+              "cost": 0.169,
+              "self_report": "Mock self-report for csv-to-json"
+            },
+            "regex-engine": {
+              "score": 43.47368421052632,
+              "cps": {
+                "exists": true,
+                "literals": false,
+                "quantifiers": true,
+                "char-class": false,
+                "alternation": false
+              },
+              "turns": 8,
+              "cost": 0.313,
+              "self_report": "Mock self-report for regex-engine"
+            },
+            "concurrent-kv": {
+              "score": 61.26315789473684,
+              "cps": {
+                "exists": true,
+                "basic": true,
+                "persist": false,
+                "concurrent": true,
+                "prefix": false
+              },
+              "turns": 7,
+              "cost": 0.518,
+              "self_report": "Mock self-report for concurrent-kv"
+            },
+            "log-analyzer": {
+              "score": 77.47368421052632,
+              "cps": {
+                "exists": true,
+                "runs": false,
+                "valid-json": true,
+                "total-ok": true,
+                "found-attacker": true
+              },
+              "turns": 8,
+              "cost": 0.664,
+              "self_report": "Mock self-report for log-analyzer"
+            },
+            "config-validator": {
+              "score": 82.21052631578948,
+              "cps": {
+                "exists": true,
+                "valid-passes": true,
+                "invalid-fails": false,
+                "bad-name": true,
+                "bad-port": true
+              },
+              "turns": 2,
+              "cost": 0.516,
+              "self_report": "Mock self-report for config-validator"
+            }
+          }
+        },
+        "mock-v2": {
+          "avg": 64.10526315789474,
+          "tasks": {
+            "csv-to-json": {
+              "score": 97.63157894736841,
+              "cps": {
+                "file-exists": true,
+                "runs": true,
+                "valid-json": true,
+                "correct-count": true,
+                "quoted-commas": true
+              },
+              "turns": 4,
+              "cost": 0.298,
+              "self_report": "Mock self-report for csv-to-json"
+            },
+            "regex-engine": {
+              "score": 48.21052631578947,
+              "cps": {
+                "exists": true,
+                "literals": false,
+                "quantifiers": false,
+                "char-class": false,
+                "alternation": true
+              },
+              "turns": 2,
+              "cost": 0.548,
+              "self_report": "Mock self-report for regex-engine"
+            },
+            "concurrent-kv": {
+              "score": 48.21052631578947,
+              "cps": {
+                "exists": true,
+                "basic": false,
+                "persist": true,
+                "concurrent": false,
+                "prefix": false
+              },
+              "turns": 2,
+              "cost": 0.876,
+              "self_report": "Mock self-report for concurrent-kv"
+            },
+            "log-analyzer": {
+              "score": 95.26315789473684,
+              "cps": {
+                "exists": true,
+                "runs": true,
+                "valid-json": true,
+                "total-ok": true,
+                "found-attacker": true
+              },
+              "turns": 7,
+              "cost": 0.361,
+              "self_report": "Mock self-report for log-analyzer"
+            },
+            "config-validator": {
+              "score": 31.210526315789476,
+              "cps": {
+                "exists": true,
+                "valid-passes": false,
+                "invalid-fails": false,
+                "bad-name": false,
+                "bad-port": false
+              },
+              "turns": 2,
+              "cost": 0.86,
+              "self_report": "Mock self-report for config-validator"
+            }
+          }
+        },
+        "mock-v1": {
+          "avg": 65.61052631578949,
+          "tasks": {
+            "csv-to-json": {
+              "score": 26.473684210526315,
+              "cps": {
+                "file-exists": false,
+                "runs": true,
+                "valid-json": false,
+                "correct-count": false,
+                "quoted-commas": false
+              },
+              "turns": 8,
+              "cost": 0.652,
+              "self_report": "Mock self-report for csv-to-json"
+            },
+            "regex-engine": {
+              "score": 94.47368421052632,
+              "cps": {
+                "exists": true,
+                "literals": true,
+                "quantifiers": true,
+                "char-class": true,
+                "alternation": true
+              },
+              "turns": 8,
+              "cost": 0.929,
+              "self_report": "Mock self-report for regex-engine"
+            },
+            "concurrent-kv": {
+              "score": 65.21052631578948,
+              "cps": {
+                "exists": false,
+                "basic": true,
+                "persist": true,
+                "concurrent": true,
+                "prefix": false
+              },
+              "turns": 2,
+              "cost": 0.772,
+              "self_report": "Mock self-report for concurrent-kv"
+            },
+            "log-analyzer": {
+              "score": 79.05263157894737,
+              "cps": {
+                "exists": true,
+                "runs": true,
+                "valid-json": true,
+                "total-ok": true,
+                "found-attacker": false
+              },
+              "turns": 6,
+              "cost": 0.895,
+              "self_report": "Mock self-report for log-analyzer"
+            },
+            "config-validator": {
+              "score": 62.8421052631579,
+              "cps": {
+                "exists": true,
+                "valid-passes": false,
+                "invalid-fails": true,
+                "bad-name": false,
+                "bad-port": true
+              },
+              "turns": 5,
+              "cost": 0.346,
+              "self_report": "Mock self-report for config-validator"
+            }
+          }
+        }
+      }
+    },
+    {
+      "gen": 3,
+      "best": "mock-v1",
+      "score": 77.07368421052632,
+      "tasks": [
+        "hello-api",
+        "diff-algorithm",
+        "regex-engine",
+        "fix-json-parser",
+        "test-suite-repair"
+      ],
+      "variants": {
+        "mock-v1": {
+          "avg": 77.07368421052632,
+          "tasks": {
+            "hello-api": {
+              "score": 77.96052631578947,
+              "cps": {
+                "file-exists": true,
+                "server-runs": true,
+                "hello-works": true,
+                "done-marker": false
+              },
+              "turns": 2,
+              "cost": 0.918,
+              "self_report": "Mock self-report for hello-api"
+            },
+            "diff-algorithm": {
+              "score": 94.47368421052632,
+              "cps": {
+                "exists": true,
+                "runs": true,
+                "additions": true,
+                "removals": true,
+                "identical": true
+              },
+              "turns": 8,
+              "cost": 0.984,
+              "self_report": "Mock self-report for diff-algorithm"
+            },
+            "regex-engine": {
+              "score": 98.42105263157895,
+              "cps": {
+                "exists": true,
+                "literals": true,
+                "quantifiers": true,
+                "char-class": true,
+                "alternation": true
+              },
+              "turns": 3,
+              "cost": 0.436,
+              "self_report": "Mock self-report for regex-engine"
+            },
+            "fix-json-parser": {
+              "score": 80.63157894736842,
+              "cps": {
+                "preserved": false,
+                "basic-ok": true,
+                "unicode": true,
+                "scientific": true,
+                "trailing-comma": true
+              },
+              "turns": 4,
+              "cost": 0.602,
+              "self_report": "Mock self-report for fix-json-parser"
+            },
+            "test-suite-repair": {
+              "score": 33.88157894736842,
+              "cps": {
+                "tests-exist": false,
+                "pytest-runs": true,
+                "all-pass": false,
+                "no-skip": false
+              },
+              "turns": 4,
+              "cost": 0.624,
+              "self_report": "Mock self-report for test-suite-repair"
+            }
+          }
+        },
+        "mock-v2": {
+          "avg": 62.80526315789474,
+          "tasks": {
+            "hello-api": {
+              "score": 95.26315789473684,
+              "cps": {
+                "file-exists": true,
+                "server-runs": true,
+                "hello-works": true,
+                "done-marker": true
+              },
+              "turns": 7,
+              "cost": 0.176,
+              "self_report": "Mock self-report for hello-api"
+            },
+            "diff-algorithm": {
+              "score": 27.263157894736846,
+              "cps": {
+                "exists": false,
+                "runs": false,
+                "additions": true,
+                "removals": false,
+                "identical": false
+              },
+              "turns": 7,
+              "cost": 0.574,
+              "self_report": "Mock self-report for diff-algorithm"
+            },
+            "regex-engine": {
+              "score": 77.47368421052632,
+              "cps": {
+                "exists": true,
+                "literals": true,
+                "quantifiers": true,
+                "char-class": false,
+                "alternation": true
+              },
+              "turns": 8,
+              "cost": 0.273,
+              "self_report": "Mock self-report for regex-engine"
+            },
+            "fix-json-parser": {
+              "score": 62.05263157894737,
+              "cps": {
+                "preserved": true,
+                "basic-ok": false,
+                "unicode": true,
+                "scientific": true,
+                "trailing-comma": false
+              },
+              "turns": 6,
+              "cost": 0.696,
+              "self_report": "Mock self-report for fix-json-parser"
+            },
+            "test-suite-repair": {
+              "score": 51.973684210526315,
+              "cps": {
+                "tests-exist": true,
+                "pytest-runs": true,
+                "all-pass": false,
+                "no-skip": false
+              },
+              "turns": 8,
+              "cost": 0.249,
+              "self_report": "Mock self-report for test-suite-repair"
+            }
+          }
+        },
+        "mock-v3": {
+          "avg": 75.87105263157893,
+          "tasks": {
+            "hello-api": {
+              "score": 51.973684210526315,
+              "cps": {
+                "file-exists": true,
+                "server-runs": false,
+                "hello-works": false,
+                "done-marker": true
+              },
+              "turns": 8,
+              "cost": 0.805,
+              "self_report": "Mock self-report for hello-api"
+            },
+            "diff-algorithm": {
+              "score": 62.05263157894737,
+              "cps": {
+                "exists": true,
+                "runs": false,
+                "additions": true,
+                "removals": false,
+                "identical": true
+              },
+              "turns": 6,
+              "cost": 0.516,
+              "self_report": "Mock self-report for diff-algorithm"
+            },
+            "regex-engine": {
+              "score": 94.47368421052632,
+              "cps": {
+                "exists": true,
+                "literals": true,
+                "quantifiers": true,
+                "char-class": true,
+                "alternation": true
+              },
+              "turns": 8,
+              "cost": 0.147,
+              "self_report": "Mock self-report for regex-engine"
+            },
+            "fix-json-parser": {
+              "score": 94.47368421052632,
+              "cps": {
+                "preserved": true,
+                "basic-ok": true,
+                "unicode": true,
+                "scientific": true,
+                "trailing-comma": true
+              },
+              "turns": 8,
+              "cost": 0.346,
+              "self_report": "Mock self-report for fix-json-parser"
+            },
+            "test-suite-repair": {
+              "score": 76.38157894736841,
+              "cps": {
+                "tests-exist": true,
+                "pytest-runs": false,
+                "all-pass": true,
+                "no-skip": true
+              },
+              "turns": 4,
+              "cost": 0.124,
+              "self_report": "Mock self-report for test-suite-repair"
+            }
+          }
+        }
+      }
+    }
+  ],
+  "timestamp": "2026-04-07T22:17:38.038294",
+  "best_claude_md": "# Project Assistant\n\n## Approach\n1. Read the task carefully before writing any code\n2. Check what files already exist in the workspace\n3. Plan your approach, then implement\n4. Test your solution before finishing\n\n## Code Quality\n- Clean variable names, comments for complex logic\n- Handle edge cases and errors\n- Follow PEP 8 for Python\n- Keep functions focused\n\n## Testing\n- Run tests if a test file exists\n- Verify manually if no tests provided\n- Read error messages carefully when tests fail\n\n## Problem Solving\n- Break complex problems into smaller steps\n- Check intermediate results\n- If stuck, re-read the requirements\n\\n# Mock modification 2\\nThis is a mock variant for dry-run testing.\\n# Mock modification 2\\nThis is a mock variant for dry-run testing.\\n# Mock modification 1\\nThis is a mock variant for dry-run testing."
+}

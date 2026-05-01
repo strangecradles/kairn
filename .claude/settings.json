@@ -30,17 +30,6 @@
         ]
       }
     ],
-    "PostToolUse": [
-      {
-        "matcher": "Edit|Write",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "FILE=$(cat | jq -r '.tool_input.file_path // empty') && [ -n \"$FILE\" ] && echo \"$FILE\" | grep -qE '\\.(ts|tsx)$' && npx eslint --fix \"$FILE\" 2>/dev/null || true"
-          }
-        ]
-      }
-    ],
     "PostCompact": [
       {
         "matcher": "",
@@ -52,8 +41,5 @@
         ]
       }
     ]
-  },
-  "statusLine": {
-    "command": "printf '%s | %s tasks' \"$(git branch --show-current 2>/dev/null || echo 'no-git')\" \"$(grep -c '\\- \\[ \\]' docs/TODO.md 2>/dev/null || echo 0)\""
   }
 }
