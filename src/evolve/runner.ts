@@ -4,7 +4,7 @@ import fs from 'fs/promises';
 import os from 'os';
 import path from 'path';
 import { copyDir } from './baseline.js';
-import { writeTrace, writeScore } from './trace.js';
+import { writeTrace } from './trace.js';
 import { scoreTask } from './scorers.js';
 import { aggregateTelemetry, estimateTelemetry } from './cost.js';
 import type { KairnConfig } from '../types.js';
@@ -15,6 +15,19 @@ const execAsync = promisify(exec);
 
 /** Directories to skip when copying the project directory as fallback. */
 const COPY_SKIP_DIRS = new Set(['.git', 'node_modules', '.kairn-evolve', '.claude']);
+
+export interface RunTaskOptions {
+  projectRoot?: string;
+  config?: KairnConfig | null;
+  model?: string;
+}
+
+function normalizeRunTaskOptions(options?: string | RunTaskOptions): RunTaskOptions {
+  if (typeof options === 'string') {
+    return { projectRoot: options };
+  }
+  return options ?? {};
+}
 
 /**
  * Copy .mcp.json from the harness into the workspace root if present.
@@ -124,8 +137,9 @@ async function cleanupIsolatedWorkspace(
  * 3. Runs task.setup commands
  * 4. Spawns `claude` CLI with --print flag
  * 5. Captures stdout, stderr, files changed
- * 6. Writes all trace files
- * 7. Cleans up workspace
+ * 6. Scores the task while the modified workspace still exists
+ * 7. Writes all trace files
+ * 8. Cleans up workspace
  *
  * @param projectRoot - Root directory of the project (contains package.json, src/, etc.)
  */
@@ -134,13 +148,15 @@ export async function runTask(
   harnessPath: string,
   traceDir: string,
   iteration: number,
-  projectRoot?: string,
-  model = 'claude-code',
+  options?: string | RunTaskOptions,
+  legacyModel = 'claude-code',
 ): Promise<TaskResult> {
   await fs.mkdir(traceDir, { recursive: true });
   const startedAt = new Date().toISOString();
   const startMs = Date.now();
 
+  const { projectRoot, config } = normalizeRunTaskOptions(options);
+  const model = config?.model ?? (typeof options === 'object' ? options.model : undefined) ?? legacyModel;
   const root = projectRoot ?? process.cwd();
   const { workDir, isWorktree } = await createIsolatedWorkspace(root, harnessPath);
 
@@ -187,6 +203,10 @@ export async function runTask(
       ? `[setup] ${setupStderr}\n${spawnResult.stderr}`
       : spawnResult.stderr;
 
+    const score = config
+      ? await scoreTask(task, workDir, spawnResult.stdout, combinedStderr, config)
+      : { pass: false, details: 'Pending scoring' };
+
     const trace: Trace = {
       taskId: task.id,
       iteration,
@@ -194,7 +214,7 @@ export async function runTask(
       stderr: combinedStderr,
       toolCalls,
       filesChanged,
-      score: { pass: false, details: 'Pending scoring' },
+      score,
       timing: { startedAt, completedAt, durationMs },
       telemetry,
       usage: telemetry.usage,
@@ -204,13 +224,12 @@ export async function runTask(
       durationMs,
     };
 
-    // Write trace files
+    // Write trace files after scoring so score.json is final before cleanup.
     await writeTrace(traceDir, trace);
 
-    // Return result (scoring is done by the caller / CLI command)
     return {
       taskId: task.id,
-      score: trace.score,
+      score,
       traceDir,
       telemetry,
       usage: telemetry.usage,
@@ -473,19 +492,10 @@ export async function evaluateAll(
           harnessPath,
           traceDir,
           iteration,
-          projectRoot,
-          config?.model,
+          { projectRoot, config },
         );
         if (taskResult.telemetry) telemetryEntries.push(taskResult.telemetry);
-
-        const stdout = await fs
-          .readFile(path.join(traceDir, 'stdout.log'), 'utf-8')
-          .catch(() => '');
-        const stderr = await fs
-          .readFile(path.join(traceDir, 'stderr.log'), 'utf-8')
-          .catch(() => '');
-        const score = await scoreTask(task, traceDir, stdout, stderr, config);
-        await writeScore(traceDir, score);
+        const score = taskResult.score;
 
         runScores.push(score.score ?? (score.pass ? 100 : 0));
         if (score.pass) passCount++;
@@ -518,22 +528,11 @@ export async function evaluateAll(
         harnessPath,
         traceDir,
         iteration,
-        projectRoot,
-        config?.model,
+        { projectRoot, config },
       );
       if (taskResult.telemetry) telemetryEntries.push(taskResult.telemetry);
 
       finalScore = taskResult.score;
-      if (config) {
-        const stdout = await fs
-          .readFile(path.join(traceDir, 'stdout.log'), 'utf-8')
-          .catch(() => '');
-        const stderr = await fs
-          .readFile(path.join(traceDir, 'stderr.log'), 'utf-8')
-          .catch(() => '');
-        finalScore = await scoreTask(task, traceDir, stdout, stderr, config);
-        await writeScore(traceDir, finalScore);
-      }
     }
 
     onProgress?.({
