@@ -292,7 +292,7 @@ export async function evolve(
       }
     }
 
-    const { results: evalResults, aggregate: evalAggregate } = await evaluateAll(
+    const { results: evalResults, aggregate: evalAggregate, telemetry: evalTelemetry } = await evaluateAll(
       tasksToRun,
       harnessPath,
       workspacePath,
@@ -406,6 +406,7 @@ export async function evolve(
         timestamp: new Date().toISOString(),
         rawScore: useKL ? rawAggregate : undefined,
         complexityCost: iterComplexityCost,
+        telemetry: evalTelemetry,
         source: 'reactive',
       };
       await writeIterationLog(workspacePath, rollbackLog);
@@ -484,6 +485,7 @@ export async function evolve(
         timestamp: new Date().toISOString(),
         rawScore: useKL ? rawAggregate : undefined,
         complexityCost: iterComplexityCost,
+        telemetry: evalTelemetry,
         source: 'reactive',
       };
       await writeIterationLog(workspacePath, perfectLog);
@@ -502,6 +504,7 @@ export async function evolve(
         timestamp: new Date().toISOString(),
         rawScore: useKL ? rawAggregate : undefined,
         complexityCost: iterComplexityCost,
+        telemetry: evalTelemetry,
         source: 'reactive',
       };
       await writeIterationLog(workspacePath, finalLog);
@@ -566,6 +569,7 @@ export async function evolve(
           timestamp: new Date().toISOString(),
           rawScore: useKL ? rawAggregate : undefined,
           complexityCost: iterComplexityCost,
+          telemetry: evalTelemetry,
           source: 'architect',
         };
         await writeIterationLog(workspacePath, skipLog);
@@ -598,6 +602,7 @@ export async function evolve(
           timestamp: new Date().toISOString(),
           rawScore: useKL ? rawAggregate : undefined,
           complexityCost: iterComplexityCost,
+          telemetry: evalTelemetry,
           source: 'architect',
         };
         await writeIterationLog(workspacePath, rejectLog);
@@ -607,7 +612,7 @@ export async function evolve(
       }
 
       // Full-suite evaluation on staging (NO pruning, NO sampling)
-      const { results: stagingResults, aggregate: stagingScore } = await evaluateAll(
+      const { results: stagingResults, aggregate: stagingScore, telemetry: stagingTelemetry } = await evaluateAll(
         tasks,  // ALL tasks, not sampled
         stagingHarnessPath,
         workspacePath,
@@ -640,6 +645,7 @@ export async function evolve(
         timestamp: new Date().toISOString(),
         rawScore: useKL ? rawAggregate : undefined,
         complexityCost: iterComplexityCost,
+        telemetry: stagingScore >= bestScore ? stagingTelemetry : evalTelemetry,
         source: 'architect',
       };
       await writeIterationLog(workspacePath, architectLog);
@@ -699,6 +705,7 @@ export async function evolve(
         timestamp: new Date().toISOString(),
         rawScore: useKL ? rawAggregate : undefined,
         complexityCost: iterComplexityCost,
+        telemetry: evalTelemetry,
         source: 'reactive',
       };
       await writeIterationLog(workspacePath, skipLog);
@@ -750,6 +757,7 @@ export async function evolve(
       timestamp: new Date().toISOString(),
       rawScore: useKL ? rawAggregate : undefined,
       complexityCost: iterComplexityCost,
+      telemetry: evalTelemetry,
       source: 'reactive',
     };
     await writeIterationLog(workspacePath, iterLog);
@@ -784,7 +792,7 @@ export async function evolve(
       const mutResult = await applyMutations(baselineHarnessPath, principalIterDir, principalProposal.mutations);
 
       onProgress?.({ type: 'iteration-start', iteration: principalIterNum });
-      const { results: principalResults, aggregate: principalAggregate } = await evaluateAll(
+      const { results: principalResults, aggregate: principalAggregate, telemetry: principalTelemetry } = await evaluateAll(
         tasks,
         mutResult.newHarnessPath,
         workspacePath,
@@ -803,6 +811,7 @@ export async function evolve(
         proposal: principalProposal,
         diffPatch: mutResult.diffPatch,
         timestamp: new Date().toISOString(),
+        telemetry: principalTelemetry,
       };
       await writeIterationLog(workspacePath, principalLog);
       history.push(principalLog);

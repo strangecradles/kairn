@@ -1,6 +1,7 @@
 import fs from 'fs/promises';
 import path from 'path';
 import type { Trace, Score, IterationLog, Proposal } from './types.js';
+import { aggregateTelemetry, unavailableTelemetry } from './cost.js';
 
 /**
  * Load a trace from filesystem.
@@ -18,6 +19,10 @@ export async function loadTrace(traceDir: string): Promise<Trace> {
     path.join(traceDir, 'timing.json'),
     'utf-8',
   ).catch(() => '{}');
+  const telemetryStr = await fs.readFile(
+    path.join(traceDir, 'telemetry.json'),
+    'utf-8',
+  ).catch(() => '');
   const scoreStr = await fs.readFile(
     path.join(traceDir, 'score.json'),
     'utf-8',
@@ -36,16 +41,31 @@ export async function loadTrace(traceDir: string): Promise<Trace> {
   // Extract iteration from parent directory name (traces/{iteration}/{taskId})
   const parentDir = path.basename(path.dirname(traceDir));
   const iteration = parseInt(parentDir, 10) || 0;
+  const timing = JSON.parse(timingStr) as Trace['timing'];
+  const telemetry = telemetryStr
+    ? JSON.parse(telemetryStr) as NonNullable<Trace['telemetry']>
+    : unavailableTelemetry(
+      'task-execution',
+      'unknown',
+      timing.durationMs ?? 0,
+      'Trace was written before telemetry fields existed',
+    );
 
   return {
     taskId: path.basename(traceDir),
     iteration,
+    telemetry,
+    usage: telemetry.usage,
+    cost: telemetry.cost,
+    model: telemetry.model,
+    phase: telemetry.phase,
+    durationMs: telemetry.durationMs,
     stdout,
     stderr,
     toolCalls,
     filesChanged: JSON.parse(filesChangedStr) as Record<string, 'created' | 'modified' | 'deleted'>,
     score: JSON.parse(scoreStr) as Trace['score'],
-    timing: JSON.parse(timingStr) as Trace['timing'],
+    timing,
   };
 }
 
@@ -99,6 +119,20 @@ export async function writeTrace(traceDir: string, trace: Trace): Promise<void> 
     'utf-8',
   );
   await fs.writeFile(
+    path.join(traceDir, 'telemetry.json'),
+    JSON.stringify(
+      trace.telemetry ?? unavailableTelemetry(
+        'task-execution',
+        'unknown',
+        trace.timing.durationMs,
+        'Trace telemetry was not provided by caller',
+      ),
+      null,
+      2,
+    ),
+    'utf-8',
+  );
+  await fs.writeFile(
     path.join(traceDir, 'score.json'),
     JSON.stringify(trace.score, null, 2),
     'utf-8',
@@ -140,6 +174,18 @@ export async function writeIterationLog(
 ): Promise<void> {
   const iterDir = path.join(workspacePath, 'iterations', log.iteration.toString());
   await fs.mkdir(iterDir, { recursive: true });
+  const telemetry = log.telemetry ?? unavailableTelemetry(
+    'iteration',
+    'unknown',
+    0,
+    'Iteration telemetry was not provided by caller',
+  );
+  log.telemetry = telemetry;
+  log.usage = telemetry.usage;
+  log.cost = telemetry.cost;
+  log.model = telemetry.model;
+  log.phase = telemetry.phase;
+  log.durationMs = telemetry.durationMs;
 
   // Write scores (include source field for architect/reactive tracking)
   await fs.writeFile(
@@ -147,6 +193,12 @@ export async function writeIterationLog(
     JSON.stringify({
       score: log.score,
       taskResults: log.taskResults,
+      telemetry,
+      usage: telemetry.usage,
+      cost: telemetry.cost,
+      model: telemetry.model,
+      phase: telemetry.phase,
+      durationMs: telemetry.durationMs,
       ...(log.source ? { source: log.source } : {}),
     }, null, 2),
     'utf-8',
@@ -190,8 +242,19 @@ export async function loadIterationLog(
   const scoresData = JSON.parse(scoresStr) as {
     score?: number;
     taskResults?: Record<string, Score>;
+    telemetry?: IterationLog['telemetry'];
+    usage?: IterationLog['usage'];
+    cost?: IterationLog['cost'];
+    model?: string;
+    phase?: string;
+    durationMs?: number;
     source?: 'reactive' | 'architect';
   };
+  const telemetry = scoresData.telemetry ?? aggregateTelemetry(
+    [],
+    'iteration',
+    scoresData.model ?? 'unknown',
+  );
 
   const proposal: Proposal | null = reasoning
     ? { reasoning, mutations: [], expectedImpact: {} }
@@ -201,6 +264,12 @@ export async function loadIterationLog(
     iteration,
     score: scoresData.score ?? 0,
     taskResults: scoresData.taskResults ?? {},
+    telemetry,
+    usage: scoresData.usage ?? telemetry.usage,
+    cost: scoresData.cost ?? telemetry.cost,
+    model: scoresData.model ?? telemetry.model,
+    phase: scoresData.phase ?? telemetry.phase,
+    durationMs: scoresData.durationMs ?? telemetry.durationMs,
     proposal,
     diffPatch: diffPatch || null,
     timestamp: '',

@@ -1,5 +1,14 @@
 import { describe, it, expect } from 'vitest';
-import { estimateCost, getModelPricing, formatCost, formatTokens } from '../cost.js';
+import {
+  aggregateTelemetry,
+  estimateCost,
+  estimateTelemetry,
+  estimateTokensFromText,
+  formatCost,
+  formatTokens,
+  getModelPricing,
+  unavailableTelemetry,
+} from '../cost.js';
 
 describe('estimateCost', () => {
   it('calculates cost for claude-sonnet-4-6', () => {
@@ -70,5 +79,67 @@ describe('formatTokens', () => {
 
   it('formats small numbers as-is', () => {
     expect(formatTokens(500)).toBe('500');
+  });
+});
+
+describe('telemetry helpers', () => {
+  it('estimates tokens from text length', () => {
+    expect(estimateTokensFromText('12345678')).toBe(2);
+    expect(estimateTokensFromText('')).toBe(0);
+  });
+
+  it('marks estimated telemetry explicitly', () => {
+    const telemetry = estimateTelemetry({
+      phase: 'task-execution',
+      model: 'claude-sonnet-4-6',
+      durationMs: 42,
+      inputText: 'abcd',
+      outputText: 'abcdefgh',
+      source: 'test',
+    });
+
+    expect(telemetry.usage.status).toBe('estimated');
+    expect(telemetry.usage.inputTokens).toBe(1);
+    expect(telemetry.usage.outputTokens).toBe(2);
+    expect(telemetry.cost.status).toBe('estimated');
+    expect(telemetry.cost.estimatedUSD).toBeGreaterThan(0);
+  });
+
+  it('marks unavailable telemetry explicitly when no usage can be inferred', () => {
+    const telemetry = unavailableTelemetry('iteration', 'unknown', 0, 'missing');
+
+    expect(telemetry.usage.status).toBe('unavailable');
+    expect(telemetry.usage.totalTokens).toBeNull();
+    expect(telemetry.cost.status).toBe('unavailable');
+    expect(telemetry.cost.estimatedUSD).toBeNull();
+  });
+
+  it('aggregates estimated telemetry entries into a cost ledger summary', () => {
+    const first = estimateTelemetry({
+      phase: 'task-execution',
+      model: 'claude-sonnet-4-6',
+      durationMs: 10,
+      inputText: 'abcd',
+      outputText: 'abcd',
+      source: 'test',
+    });
+    const second = estimateTelemetry({
+      phase: 'task-execution',
+      model: 'claude-sonnet-4-6',
+      durationMs: 20,
+      inputText: 'abcdefgh',
+      outputText: 'abcdefgh',
+      source: 'test',
+    });
+
+    const aggregate = aggregateTelemetry([first, second], 'iteration', 'claude-sonnet-4-6');
+
+    expect(aggregate.durationMs).toBe(30);
+    expect(aggregate.usage.status).toBe('estimated');
+    expect(aggregate.usage.totalTokens).toBe(6);
+    expect(aggregate.cost.status).toBe('estimated');
+    expect(aggregate.cost.estimatedUSD).toBeCloseTo(
+      (first.cost.estimatedUSD ?? 0) + (second.cost.estimatedUSD ?? 0),
+    );
   });
 });

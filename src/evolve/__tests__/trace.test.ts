@@ -5,9 +5,35 @@ import { loadTrace, loadIterationTraces, writeTrace, writeScore, traceExists, wr
 import type { Trace, Score, IterationLog, Proposal } from '../types.js';
 
 function makeTrace(overrides: Partial<Trace> = {}): Trace {
+  const telemetry = {
+    phase: 'task-execution' as const,
+    model: 'claude-sonnet-4-6',
+    durationMs: 60000,
+    usage: {
+      status: 'estimated' as const,
+      inputTokens: 10,
+      outputTokens: 20,
+      totalTokens: 30,
+      source: 'test',
+      reason: 'test estimate',
+    },
+    cost: {
+      status: 'estimated' as const,
+      estimatedUSD: 0.00033,
+      currency: 'USD' as const,
+      source: 'test',
+      reason: 'test estimate',
+    },
+  };
   return {
     taskId: 'task-1',
     iteration: 0,
+    telemetry,
+    usage: telemetry.usage,
+    cost: telemetry.cost,
+    model: telemetry.model,
+    phase: telemetry.phase,
+    durationMs: telemetry.durationMs,
     stdout: 'output text',
     stderr: '',
     toolCalls: [],
@@ -105,6 +131,14 @@ describe('writeTrace', () => {
     await writeTrace(traceDir, makeTrace({ score }));
     const content = await fs.readFile(path.join(traceDir, 'score.json'), 'utf-8');
     expect(JSON.parse(content)).toEqual(score);
+  });
+
+  it('writes telemetry.json with usage and cost metadata', async () => {
+    const traceDir = path.join(tempDir, 'trace-telemetry');
+    const trace = makeTrace();
+    await writeTrace(traceDir, trace);
+    const content = await fs.readFile(path.join(traceDir, 'telemetry.json'), 'utf-8');
+    expect(JSON.parse(content)).toEqual(trace.telemetry);
   });
 });
 
@@ -498,6 +532,30 @@ describe('loadIterationLog', () => {
     expect(loaded!.taskResults).toEqual(taskResults);
     expect(loaded!.proposal?.reasoning).toBe('Round-trip reasoning');
     expect(loaded!.diffPatch).toBe('some diff content');
+  });
+
+  it('round-trips iteration telemetry while preserving legacy score fields', async () => {
+    const telemetry = makeTrace().telemetry!;
+    const log: IterationLog = {
+      iteration: 8,
+      score: 0.85,
+      taskResults: { 'task-a': { pass: true, score: 85 } },
+      proposal: null,
+      diffPatch: null,
+      timestamp: '2026-01-01T00:00:00.000Z',
+      telemetry: { ...telemetry, phase: 'iteration' },
+    };
+
+    await writeIterationLog(tempDir, log);
+    const loaded = await loadIterationLog(tempDir, 8);
+
+    expect(loaded!.taskResults).toEqual(log.taskResults);
+    expect(loaded!.telemetry?.usage.status).toBe('estimated');
+    expect(loaded!.usage?.totalTokens).toBe(30);
+    expect(loaded!.cost?.estimatedUSD).toBe(0.00033);
+    expect(loaded!.model).toBe('claude-sonnet-4-6');
+    expect(loaded!.phase).toBe('iteration');
+    expect(loaded!.durationMs).toBe(60000);
   });
 
   it('returns score 0 and empty taskResults when scores.json is missing', async () => {

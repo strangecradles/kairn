@@ -3,6 +3,7 @@ import fs from 'fs/promises';
 import path from 'path';
 import { generateMarkdownReport, generateJsonReport } from '../report.js';
 import { stringify as yamlStringify } from 'yaml';
+import type { EvolveTelemetry } from '../cost.js';
 
 // ---------------------------------------------------------------------------
 // Test workspace helpers
@@ -35,6 +36,7 @@ async function createWorkspace(opts: {
       mutations: Array<{ file: string; action: string; newText: string; rationale: string }>;
     };
     source?: 'reactive' | 'architect';
+    telemetry?: EvolveTelemetry;
   }>;
   tasks: Array<{ id: string; template: string; description: string; category?: 'harness-sensitivity' | 'substantive' }>;
 }): Promise<string> {
@@ -70,6 +72,14 @@ async function createWorkspace(opts: {
       JSON.stringify({
         score: iter.score,
         taskResults: iter.taskResults,
+        ...(iter.telemetry ? {
+          telemetry: iter.telemetry,
+          usage: iter.telemetry.usage,
+          cost: iter.telemetry.cost,
+          model: iter.telemetry.model,
+          phase: iter.telemetry.phase,
+          durationMs: iter.telemetry.durationMs,
+        } : {}),
         ...(iter.source ? { source: iter.source } : {}),
       }, null, 2),
       'utf-8',
@@ -135,7 +145,7 @@ describe('generateMarkdownReport', () => {
     const md = await generateMarkdownReport(workspace);
 
     expect(md).toContain('## Iterations');
-    expect(md).toContain('| Iter | Score | Mutations | Mode | Status |');
+    expect(md).toContain('| Iter | Score | Mutations | Mode | Usage | Cost | Status |');
     expect(md).toContain('baseline');
   });
 
@@ -192,6 +202,8 @@ describe('generateJsonReport', () => {
     expect(report).toHaveProperty('iterations');
     expect(report).toHaveProperty('leaderboard');
     expect(report).toHaveProperty('counterfactuals');
+    expect(report.overview).toHaveProperty('usage');
+    expect(report.overview).toHaveProperty('cost');
   });
 
   it('overview contains correct metrics', async () => {
@@ -352,6 +364,46 @@ describe('generateJsonReport', () => {
     expect(report.leaderboard[0].variance![0].runs).toBe(3);
     expect(report.leaderboard[0].variance![0].stddev).toBeCloseTo(4.08, 1);
   });
+
+  it('includes usage and estimated cost telemetry in overview and iterations', async () => {
+    const telemetry: EvolveTelemetry = {
+      phase: 'iteration',
+      model: 'claude-sonnet-4-6',
+      durationMs: 1200,
+      usage: {
+        status: 'estimated',
+        inputTokens: 100,
+        outputTokens: 50,
+        totalTokens: 150,
+        source: 'test',
+        reason: 'test estimate',
+      },
+      cost: {
+        status: 'estimated',
+        estimatedUSD: 0.00105,
+        currency: 'USD',
+        source: 'test',
+        reason: 'test estimate',
+      },
+    };
+    const workspace = await createWorkspace({
+      iterations: [
+        { iteration: 0, score: 80, taskResults: { 'task-1': { pass: true, score: 80 } }, telemetry },
+      ],
+      tasks: [{ id: 'task-1', template: 'add-feature', description: 'Task' }],
+    });
+
+    const report = await generateJsonReport(workspace);
+
+    expect(report.overview.usage?.status).toBe('estimated');
+    expect(report.overview.usage?.totalTokens).toBe(150);
+    expect(report.overview.cost?.estimatedUSD).toBe(0.00105);
+    expect(report.iterations[0].model).toBe('claude-sonnet-4-6');
+    expect(report.iterations[0].phase).toBe('iteration');
+    expect(report.iterations[0].durationMs).toBe(1200);
+    expect(report.iterations[0].usage?.status).toBe('estimated');
+    expect(report.iterations[0].cost?.status).toBe('estimated');
+  });
 });
 
 describe('generateMarkdownReport with variance', () => {
@@ -426,7 +478,7 @@ describe('generateMarkdownReport with mode column', () => {
     });
 
     const md = await generateMarkdownReport(workspace);
-    expect(md).toContain('| Iter | Score | Mutations | Mode | Status |');
+    expect(md).toContain('| Iter | Score | Mutations | Mode | Usage | Cost | Status |');
   });
 
   it('shows reactive mode for iterations without source', async () => {

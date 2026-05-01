@@ -182,13 +182,12 @@ describe('runPopulation', () => {
   it('identifies the branch with highest score', async () => {
     const tasks = [makeTask('task-1')];
 
-    // Return different scores for different branch workspaces
-    let callCount = 0;
-    mockEvaluateAll.mockImplementation(async () => {
-      callCount++;
+    // Return different scores for different branch workspaces. Branches run in
+    // parallel, so deriving the score from the workspace path avoids order flake.
+    mockEvaluateAll.mockImplementation(async (_tasks, _harnessPath, workspacePath) => {
       const scores = [60, 90, 70]; // Branch 1 wins
-      const idx = (callCount - 1) % 3;
-      const score = scores[idx];
+      const idx = Number(path.basename(workspacePath));
+      const score = scores[idx] ?? 0;
       return {
         results: { 'task-1': { pass: score >= 50, score } },
         aggregate: score,

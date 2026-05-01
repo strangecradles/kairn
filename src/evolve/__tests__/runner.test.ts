@@ -506,6 +506,34 @@ describe('runTask', () => {
     expect(result.score.details).toBe('Pending scoring');
   });
 
+  it('returns and persists estimated telemetry for a task attempt', async () => {
+    const harnessDir = path.join(tempDir, 'harness');
+    await fs.mkdir(harnessDir, { recursive: true });
+    await fs.writeFile(path.join(harnessDir, 'CLAUDE.md'), '# Test');
+
+    const traceDir = path.join(tempDir, 'traces', '0', 'test-task-telemetry');
+    const result = await runTask(
+      makeTask({ id: 'test-task-telemetry', description: 'Implement telemetry' }),
+      harnessDir,
+      traceDir,
+      0,
+      undefined,
+      'claude-sonnet-4-6',
+    );
+    const telemetryFile = JSON.parse(
+      await fs.readFile(path.join(traceDir, 'telemetry.json'), 'utf-8'),
+    ) as NonNullable<typeof result.telemetry>;
+
+    expect(result.model).toBe('claude-sonnet-4-6');
+    expect(result.phase).toBe('task-execution');
+    expect(result.durationMs).toBeGreaterThanOrEqual(0);
+    expect(result.usage?.status).toBe('estimated');
+    expect(result.cost?.status).toBe('estimated');
+    expect(result.cost?.estimatedUSD).toBeGreaterThan(0);
+    expect(telemetryFile.usage.status).toBe('estimated');
+    expect(telemetryFile.cost.estimatedUSD).toBe(result.cost?.estimatedUSD);
+  });
+
   it('runs setup commands before spawning claude', async () => {
     // Create a fake claude that reads a setup-generated file
     const fakeScript = path.join(fakeBinDir, 'claude');

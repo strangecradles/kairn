@@ -2,6 +2,7 @@ import fs from 'fs/promises';
 import path from 'path';
 import { loadIterationLog } from './trace.js';
 import { diagnoseCounterfactuals } from './diagnosis.js';
+import { aggregateTelemetry, formatCost, formatTokens } from './cost.js';
 import type {
   IterationLog,
   Task,
@@ -152,6 +153,22 @@ function iterationStatus(iter: IterationLog, bestIteration: number): string {
   return 'evaluated';
 }
 
+function telemetryCostText(iter: IterationLog): string {
+  const cost = iter.telemetry?.cost.estimatedUSD;
+  if (cost === null || cost === undefined) {
+    return iter.telemetry?.cost.status ?? 'unavailable';
+  }
+  return `${formatCost(cost)} ${iter.telemetry?.cost.status ?? 'estimated'}`;
+}
+
+function telemetryUsageText(iter: IterationLog): string {
+  const totalTokens = iter.telemetry?.usage.totalTokens;
+  if (totalTokens === null || totalTokens === undefined) {
+    return iter.telemetry?.usage.status ?? 'unavailable';
+  }
+  return `${formatTokens(totalTokens)} ${iter.telemetry?.usage.status ?? 'estimated'}`;
+}
+
 /**
  * Generate a human-readable Markdown report of an evolution run.
  */
@@ -170,6 +187,10 @@ export async function generateMarkdownReport(workspacePath: string): Promise<str
 
   const counterfactuals = diagnoseCounterfactuals(iterations, tasks);
   const leaderboard = buildLeaderboard(iterations, tasks);
+  const runTelemetry = aggregateTelemetry(
+    iterations.map(iter => iter.telemetry),
+    'report',
+  );
 
   const lines: string[] = [];
 
@@ -187,6 +208,8 @@ export async function generateMarkdownReport(workspacePath: string): Promise<str
   lines.push(`| Best score | ${bestIter.score.toFixed(1)}% |`);
   lines.push(`| Best iteration | ${bestIter.iteration} |`);
   lines.push(`| Improvement | ${improvement >= 0 ? '+' : ''}${improvement.toFixed(1)} points |`);
+  lines.push(`| Usage | ${runTelemetry.usage.totalTokens === null ? runTelemetry.usage.status : `${formatTokens(runTelemetry.usage.totalTokens)} ${runTelemetry.usage.status}`} |`);
+  lines.push(`| Estimated cost | ${runTelemetry.cost.estimatedUSD === null ? runTelemetry.cost.status : `${formatCost(runTelemetry.cost.estimatedUSD)} ${runTelemetry.cost.status}`} |`);
 
   // Category breakdown at best iteration
   const categoryBreakdown = computeCategoryBreakdown(tasks, bestIter.taskResults);
@@ -205,8 +228,8 @@ export async function generateMarkdownReport(workspacePath: string): Promise<str
     Object.values(iter.taskResults).some(s => s.variance),
   );
 
-  lines.push('| Iter | Score | Mutations | Mode | Status |');
-  lines.push('|------|-------|-----------|------|--------|');
+  lines.push('| Iter | Score | Mutations | Mode | Usage | Cost | Status |');
+  lines.push('|------|-------|-----------|------|-------|------|--------|');
   for (const iter of iterations) {
     const mutations = iter.proposal?.mutations.length ?? 0;
     const mutStr = mutations > 0 ? mutations.toString() : '-';
@@ -222,7 +245,7 @@ export async function generateMarkdownReport(workspacePath: string): Promise<str
         scoreStr = `${iter.score.toFixed(1)}% ±${avgStddev.toFixed(1)}`;
       }
     }
-    lines.push(`| ${iter.iteration} | ${scoreStr} | ${mutStr} | ${mode} | ${status} |`);
+    lines.push(`| ${iter.iteration} | ${scoreStr} | ${mutStr} | ${mode} | ${telemetryUsageText(iter)} | ${telemetryCostText(iter)} | ${status} |`);
   }
   lines.push('');
 
@@ -310,6 +333,10 @@ export async function generateJsonReport(workspacePath: string): Promise<Evoluti
 
   const counterfactuals = diagnoseCounterfactuals(iterations, tasks);
   const leaderboard = buildLeaderboard(iterations, tasks);
+  const telemetry = aggregateTelemetry(
+    iterations.map(iter => iter.telemetry),
+    'report',
+  );
 
   // Compute category breakdown at best iteration
   const categoryBreakdown = bestIterLog
@@ -324,6 +351,9 @@ export async function generateJsonReport(workspacePath: string): Promise<Evoluti
       bestScore: bestIter.score,
       bestIteration: bestIter.iteration,
       improvement,
+      telemetry,
+      usage: telemetry.usage,
+      cost: telemetry.cost,
       ...(categoryBreakdown ? { categoryBreakdown } : {}),
     },
     iterations: iterations.map(iter => {
@@ -340,6 +370,12 @@ export async function generateJsonReport(workspacePath: string): Promise<Evoluti
         mutationCount: iter.proposal?.mutations.length ?? 0,
         status: iterationStatus(iter, bestIter.iteration),
         mode: iter.source ?? 'reactive',
+        telemetry: iter.telemetry,
+        usage: iter.telemetry?.usage,
+        cost: iter.telemetry?.cost,
+        model: iter.telemetry?.model,
+        phase: iter.telemetry?.phase,
+        durationMs: iter.telemetry?.durationMs,
       };
     }),
     leaderboard,

@@ -6,8 +6,10 @@ import path from 'path';
 import { copyDir } from './baseline.js';
 import { writeTrace, writeScore } from './trace.js';
 import { scoreTask } from './scorers.js';
+import { aggregateTelemetry, estimateTelemetry } from './cost.js';
 import type { KairnConfig } from '../types.js';
 import type { Task, TaskResult, Trace, Score, LoopProgressEvent } from './types.js';
+import type { EvolveTelemetry } from './cost.js';
 
 const execAsync = promisify(exec);
 
@@ -133,6 +135,7 @@ export async function runTask(
   traceDir: string,
   iteration: number,
   projectRoot?: string,
+  model = 'claude-code',
 ): Promise<TaskResult> {
   await fs.mkdir(traceDir, { recursive: true });
   const startedAt = new Date().toISOString();
@@ -170,6 +173,14 @@ export async function runTask(
 
     const completedAt = new Date().toISOString();
     const durationMs = Date.now() - startMs;
+    const telemetry = estimateTelemetry({
+      phase: 'task-execution',
+      model,
+      durationMs,
+      inputText: task.description,
+      outputText: `${spawnResult.stdout}\n${spawnResult.stderr}`,
+      source: 'claude-cli-text-estimate',
+    });
 
     // Build trace
     const combinedStderr = setupStderr
@@ -185,6 +196,12 @@ export async function runTask(
       filesChanged,
       score: { pass: false, details: 'Pending scoring' },
       timing: { startedAt, completedAt, durationMs },
+      telemetry,
+      usage: telemetry.usage,
+      cost: telemetry.cost,
+      model: telemetry.model,
+      phase: telemetry.phase,
+      durationMs,
     };
 
     // Write trace files
@@ -195,6 +212,12 @@ export async function runTask(
       taskId: task.id,
       score: trace.score,
       traceDir,
+      telemetry,
+      usage: telemetry.usage,
+      cost: telemetry.cost,
+      model: telemetry.model,
+      phase: telemetry.phase,
+      durationMs,
     };
   } finally {
     await cleanupIsolatedWorkspace(workDir, isWorktree, root);
@@ -414,8 +437,9 @@ export async function evaluateAll(
   onProgress?: (event: LoopProgressEvent) => void,
   runsPerTask: number = 1,
   parallelTasks: number = 1,
-): Promise<{ results: Record<string, Score>; aggregate: number }> {
+): Promise<{ results: Record<string, Score>; aggregate: number; telemetry?: EvolveTelemetry }> {
   const results: Record<string, Score> = {};
+  const telemetryEntries: NonNullable<TaskResult['telemetry']>[] = [];
   const projectRoot = path.resolve(workspacePath, '..');
   const effectiveRuns = Math.max(1, runsPerTask);
   const concurrency = Math.max(1, parallelTasks);
@@ -444,7 +468,15 @@ export async function evaluateAll(
           message: `Run ${run + 1}/${effectiveRuns} of ${task.id}`,
         });
 
-        await runTask(task, harnessPath, traceDir, iteration, projectRoot);
+        const taskResult = await runTask(
+          task,
+          harnessPath,
+          traceDir,
+          iteration,
+          projectRoot,
+          config?.model,
+        );
+        if (taskResult.telemetry) telemetryEntries.push(taskResult.telemetry);
 
         const stdout = await fs
           .readFile(path.join(traceDir, 'stdout.log'), 'utf-8')
@@ -481,7 +513,15 @@ export async function evaluateAll(
         task.id,
       );
 
-      const taskResult = await runTask(task, harnessPath, traceDir, iteration, projectRoot);
+      const taskResult = await runTask(
+        task,
+        harnessPath,
+        traceDir,
+        iteration,
+        projectRoot,
+        config?.model,
+      );
+      if (taskResult.telemetry) telemetryEntries.push(taskResult.telemetry);
 
       finalScore = taskResult.score;
       if (config) {
@@ -522,5 +562,9 @@ export async function evaluateAll(
   );
   const aggregate = scores.length > 0 ? total / scores.length : 0;
 
-  return { results, aggregate };
+  return {
+    results,
+    aggregate,
+    telemetry: aggregateTelemetry(telemetryEntries, 'iteration', config?.model ?? 'claude-code'),
+  };
 }

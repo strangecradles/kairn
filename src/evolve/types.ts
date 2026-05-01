@@ -1,4 +1,6 @@
 // Eval templates
+import type { EvolveTelemetry } from './cost.js';
+
 export type EvalTemplate = 'add-feature' | 'fix-bug' | 'refactor' | 'test-writing' | 'config-change' | 'documentation' | 'convention-adherence' | 'workflow-compliance' | 'rule-compliance' | 'intent-routing' | 'persistence-completion' | 'real-bug-fix' | 'real-feature-add' | 'codebase-question';
 
 /** Category distinguishing harness-sensitivity probes from substantive SWE-bench-style tasks. */
@@ -47,6 +49,12 @@ export interface Score {
 export interface Trace {
   taskId: string;
   iteration: number;
+  telemetry?: EvolveTelemetry;
+  usage?: EvolveTelemetry['usage'];
+  cost?: EvolveTelemetry['cost'];
+  model?: string;
+  phase?: string;
+  durationMs?: number;
   stdout: string;
   stderr: string;
   toolCalls: unknown[];
@@ -98,6 +106,12 @@ export interface TaskResult {
   taskId: string;
   score: Score;
   traceDir: string;
+  telemetry?: EvolveTelemetry;
+  usage?: EvolveTelemetry['usage'];
+  cost?: EvolveTelemetry['cost'];
+  model?: string;
+  phase?: string;
+  durationMs?: number;
 }
 
 // Raw output from Claude Code subprocess
@@ -197,6 +211,12 @@ export interface IterationLog {
   iteration: number;
   score: number;
   taskResults: Record<string, Score>;
+  telemetry?: EvolveTelemetry;
+  usage?: EvolveTelemetry['usage'];
+  cost?: EvolveTelemetry['cost'];
+  model?: string;
+  phase?: string;
+  durationMs?: number;
   proposal: Proposal | null;    // null for iteration 0 (baseline eval) or rollback
   diffPatch: string | null;     // null for iteration 0 or rollback
   timestamp: string;
@@ -263,6 +283,9 @@ export interface EvolutionReport {
     bestScore: number;
     bestIteration: number;
     improvement: number;
+    telemetry?: EvolveTelemetry;
+    usage?: EvolveTelemetry['usage'];
+    cost?: EvolveTelemetry['cost'];
     categoryBreakdown?: CategoryBreakdown;
   };
   iterations: Array<{
@@ -272,6 +295,12 @@ export interface EvolutionReport {
     mutationCount: number;
     status: string;
     mode?: string;
+    telemetry?: EvolveTelemetry;
+    usage?: EvolveTelemetry['usage'];
+    cost?: EvolveTelemetry['cost'];
+    model?: string;
+    phase?: string;
+    durationMs?: number;
   }>;
   leaderboard: Array<{
     taskId: string;
