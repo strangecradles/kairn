@@ -21,8 +21,10 @@ vi.mock("ora", () => ({
 // Mock @inquirer/prompts
 const confirmMock = vi.fn();
 const selectMock = vi.fn();
+const inputMock = vi.fn();
 vi.mock("@inquirer/prompts", () => ({
   confirm: confirmMock,
+  input: inputMock,
   select: selectMock,
 }));
 
@@ -620,5 +622,67 @@ describe("evolve run action", () => {
     const logCalls = consoleLogSpy.mock.calls.map((c: unknown[]) => String(c[0]));
     const summaryLine = logCalls.find((line: string) => line.includes("1") && line.includes("passed"));
     expect(summaryLine).toBeDefined();
+  });
+
+  it("prints a dry-run forecast without executing the evolve loop", async () => {
+    loadConfigMock.mockResolvedValue({
+      provider: "anthropic",
+      api_key: "test-key",
+      model: "claude-sonnet-4-6",
+      default_runtime: "claude-code",
+      created_at: new Date().toISOString(),
+    });
+
+    const runCmd = evolveCommand.commands.find((c) => c.name() === "run");
+    await runCmd?.parseAsync(["node", "run", "--dry-run", "--iterations", "2"]);
+
+    expect(evolveMock).not.toHaveBeenCalled();
+    expect(runTaskMock).not.toHaveBeenCalled();
+    const logCalls = consoleLogSpy.mock.calls.map((c: unknown[]) => String(c[0]));
+    expect(logCalls.some((line: string) => line.includes("Budget forecast"))).toBe(true);
+    expect(logCalls.some((line: string) => line.includes("Dry run complete"))).toBe(true);
+  });
+
+  it("fails closed when the forecast exceeds a hard run budget", async () => {
+    loadConfigMock.mockResolvedValue({
+      provider: "anthropic",
+      api_key: "test-key",
+      model: "claude-sonnet-4-6",
+      default_runtime: "claude-code",
+      created_at: new Date().toISOString(),
+    });
+
+    const runCmd = evolveCommand.commands.find((c) => c.name() === "run");
+    await runCmd?.parseAsync(["node", "run", "--dry-run", "--budget-run-usd", "0"]);
+
+    expect(process.exit).toHaveBeenCalledWith(1);
+    expect(evolveMock).not.toHaveBeenCalled();
+    const logCalls = consoleLogSpy.mock.calls.map((c: unknown[]) => String(c[0]));
+    expect(logCalls.some((line: string) => line.includes("exceeds configured hard budget"))).toBe(true);
+  });
+
+  it("allows an explicit over-budget override", async () => {
+    loadConfigMock.mockResolvedValue({
+      provider: "anthropic",
+      api_key: "test-key",
+      model: "claude-sonnet-4-6",
+      default_runtime: "claude-code",
+      created_at: new Date().toISOString(),
+    });
+
+    const runCmd = evolveCommand.commands.find((c) => c.name() === "run");
+    await runCmd?.parseAsync([
+      "node",
+      "run",
+      "--dry-run",
+      "--budget-run-usd",
+      "0",
+      "--allow-over-budget",
+    ]);
+
+    expect(evolveMock).not.toHaveBeenCalled();
+    const logCalls = consoleLogSpy.mock.calls.map((c: unknown[]) => String(c[0]));
+    expect(logCalls.some((line: string) => line.includes("Proceeding because --allow-over-budget"))).toBe(true);
+    expect(logCalls.some((line: string) => line.includes("Dry run complete"))).toBe(true);
   });
 });

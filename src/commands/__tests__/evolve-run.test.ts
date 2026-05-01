@@ -161,6 +161,35 @@ describe('loadEvolveConfigFromWorkspace', () => {
     expect(config.parallelTasks).toBe(2);
   });
 
+  it('reads hard budget fields from config.yaml', async () => {
+    const workspace = await createTestWorkspace();
+    await fs.writeFile(
+      path.join(workspace, 'config.yaml'),
+      yamlStringify({
+        budget: {
+          run_usd: 10,
+          task_usd: 1,
+          scorer_usd: 0.5,
+          proposer_usd: 2,
+          architect_usd: 3,
+          pbt_usd: 25,
+        },
+      }),
+      'utf-8',
+    );
+
+    const config = await loadEvolveConfigFromWorkspace(workspace);
+
+    expect(config.budgets).toEqual({
+      runUSD: 10,
+      taskUSD: 1,
+      scorerUSD: 0.5,
+      proposerUSD: 2,
+      architectUSD: 3,
+      pbtUSD: 25,
+    });
+  });
+
   it('returns defaults when config.yaml is missing', async () => {
     const workspace = path.join(tempDir, 'no-config');
     await fs.mkdir(workspace, { recursive: true });
@@ -220,6 +249,25 @@ describe('evolve run command', () => {
 
     const iterationsOpt = runCmd!.options.find(o => o.long === '--iterations');
     expect(iterationsOpt).toBeDefined();
+  });
+
+  it('accepts budget forecast and override options', async () => {
+    const { evolveCommand } = await import('../evolve.js');
+    const runCmd = evolveCommand.commands.find(c => c.name() === 'run');
+    expect(runCmd).toBeDefined();
+
+    for (const option of [
+      '--budget-run-usd',
+      '--budget-task-usd',
+      '--budget-scorer-usd',
+      '--budget-proposer-usd',
+      '--budget-architect-usd',
+      '--budget-pbt-usd',
+      '--allow-over-budget',
+      '--dry-run',
+    ]) {
+      expect(runCmd!.options.find(o => o.long === option)).toBeDefined();
+    }
   });
 });
 

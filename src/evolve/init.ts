@@ -16,6 +16,17 @@ export async function createEvolveWorkspace(
   config: EvolveConfig,
 ): Promise<string> {
   const workspace = path.join(projectRoot, '.kairn-evolve');
+  const budgetConfig = {
+    run_usd: config.budgets?.runUSD,
+    task_usd: config.budgets?.taskUSD,
+    scorer_usd: config.budgets?.scorerUSD,
+    proposer_usd: config.budgets?.proposerUSD,
+    architect_usd: config.budgets?.architectUSD,
+    pbt_usd: config.budgets?.pbtUSD,
+  };
+  const definedBudgets = Object.fromEntries(
+    Object.entries(budgetConfig).filter(([, value]) => value !== undefined),
+  );
 
   // Create directories
   await fs.mkdir(path.join(workspace, 'baseline'), { recursive: true });
@@ -29,6 +40,7 @@ export async function createEvolveWorkspace(
     scorer: config.scorer,
     max_iterations: config.maxIterations,
     parallel_tasks: config.parallelTasks,
+    ...(Object.keys(definedBudgets).length > 0 ? { budget: definedBudgets } : {}),
   };
   await fs.writeFile(
     path.join(workspace, 'config.yaml'),

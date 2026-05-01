@@ -150,6 +150,37 @@ describe("createEvolveWorkspace", () => {
     expect(parsed.parallel_tasks).toBe(2);
   });
 
+  it("writes budget config fields when provided", async () => {
+    const config = makeEvolveConfig({
+      budgets: {
+        runUSD: 10,
+        taskUSD: 1,
+        scorerUSD: 0.5,
+        proposerUSD: 2,
+        architectUSD: 3,
+        pbtUSD: 25,
+      },
+    });
+
+    const result = await createEvolveWorkspace(tempDir, config);
+    const configContent = await fs.readFile(
+      path.join(result, "config.yaml"),
+      "utf-8",
+    );
+
+    const parsed = yamlParse(configContent) as {
+      budget: Record<string, number>;
+    };
+    expect(parsed.budget).toEqual({
+      run_usd: 10,
+      task_usd: 1,
+      scorer_usd: 0.5,
+      proposer_usd: 2,
+      architect_usd: 3,
+      pbt_usd: 25,
+    });
+  });
+
   it("returns the workspace path", async () => {
     const config = makeEvolveConfig();
     const result = await createEvolveWorkspace(tempDir, config);

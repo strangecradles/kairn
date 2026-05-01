@@ -45,6 +45,16 @@ export interface Score {
   failureReason?: string;
 }
 
+// Hard cost budgets for evolve preflight gates, in USD.
+export interface EvolveBudgetConfig {
+  runUSD?: number;
+  taskUSD?: number;
+  scorerUSD?: number;
+  proposerUSD?: number;
+  architectUSD?: number;
+  pbtUSD?: number;
+}
+
 // Full execution trace for a single task run
 export interface Trace {
   taskId: string;
@@ -87,6 +97,7 @@ export interface EvolveConfig {
   architectEvery: number;
   schedule: 'explore-exploit' | 'constant' | 'adaptive';
   architectModel: string;
+  budgets?: EvolveBudgetConfig;
 }
 
 // Shape of parsed tasks.yaml

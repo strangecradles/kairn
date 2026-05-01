@@ -10,6 +10,7 @@ import type {
   ResearchReport,
   ResearchProgressEvent,
   EvolutionReport,
+  EvolveBudgetConfig,
   Mutation,
   Score,
 } from "../types.js";
@@ -35,11 +36,40 @@ describe("evolve types", () => {
         architectEvery: 3,
         schedule: "explore-exploit",
         architectModel: "claude-opus-4-6",
+        budgets: {
+          runUSD: 10,
+          taskUSD: 1,
+          scorerUSD: 0.5,
+          proposerUSD: 2,
+          architectUSD: 3,
+          pbtUSD: 25,
+        },
       };
 
       expect(config.architectEvery).toBe(3);
       expect(config.schedule).toBe("explore-exploit");
       expect(config.architectModel).toBe("claude-opus-4-6");
+      expect(config.budgets?.pbtUSD).toBe(25);
+    });
+
+    it("supports all budget fields", () => {
+      const budgets: EvolveBudgetConfig = {
+        runUSD: 10,
+        taskUSD: 1,
+        scorerUSD: 0.5,
+        proposerUSD: 2,
+        architectUSD: 3,
+        pbtUSD: 25,
+      };
+
+      expect(Object.keys(budgets)).toEqual([
+        "runUSD",
+        "taskUSD",
+        "scorerUSD",
+        "proposerUSD",
+        "architectUSD",
+        "pbtUSD",
+      ]);
     });
 
     it("accepts all valid schedule types", () => {

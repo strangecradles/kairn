@@ -16,7 +16,13 @@ import { generateMarkdownReport, generateJsonReport } from '../evolve/report.js'
 import { generateDiff } from '../evolve/mutator.js';
 import { applyEvolution } from '../evolve/apply.js';
 import { loadConfig } from '../config.js';
-import type { EvolveConfig, Task, TasksFile, TaskResult, LoopProgressEvent } from '../evolve/types.js';
+import {
+  checkEvolveBudgets,
+  forecastEvolveBudget,
+  formatBudgetForecast,
+  formatBudgetViolations,
+} from '../evolve/budget.js';
+import type { EvolveBudgetConfig, EvolveConfig, Task, TasksFile, TaskResult, LoopProgressEvent } from '../evolve/types.js';
 
 const DEFAULT_CONFIG: EvolveConfig = {
   model: 'claude-sonnet-4-6',
@@ -36,7 +42,100 @@ const DEFAULT_CONFIG: EvolveConfig = {
   architectEvery: 3,
   schedule: 'explore-exploit',
   architectModel: 'claude-sonnet-4-6',
+  budgets: {},
 };
+
+function readBudgetNumber(value: unknown): number | undefined {
+  if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) {
+    return undefined;
+  }
+  return value;
+}
+
+function readBudgetConfig(parsed: Record<string, unknown>): EvolveBudgetConfig {
+  const nested = typeof parsed.budget === 'object' && parsed.budget !== null
+    ? parsed.budget as Record<string, unknown>
+    : {};
+
+  return {
+    runUSD: readBudgetNumber(nested.run_usd ?? parsed.budget_run_usd),
+    taskUSD: readBudgetNumber(nested.task_usd ?? parsed.budget_task_usd),
+    scorerUSD: readBudgetNumber(nested.scorer_usd ?? parsed.budget_scorer_usd),
+    proposerUSD: readBudgetNumber(nested.proposer_usd ?? parsed.budget_proposer_usd),
+    architectUSD: readBudgetNumber(nested.architect_usd ?? parsed.budget_architect_usd),
+    pbtUSD: readBudgetNumber(nested.pbt_usd ?? parsed.budget_pbt_usd),
+  };
+}
+
+function parseBudgetFlag(value: string | undefined, flagName: string): number | undefined {
+  if (value === undefined) return undefined;
+  const parsed = parseFloat(value);
+  if (Number.isNaN(parsed) || parsed < 0) {
+    console.log(ui.error(`${flagName} must be a non-negative number`));
+    process.exit(1);
+    return undefined;
+  }
+  return parsed;
+}
+
+function applyBudgetFlags(config: EvolveConfig, options: BudgetFlagOptions): void {
+  const budgets: EvolveBudgetConfig = { ...(config.budgets ?? {}) };
+  const entries: Array<[keyof EvolveBudgetConfig, string | undefined, string]> = [
+    ['runUSD', options.budgetRunUsd, '--budget-run-usd'],
+    ['taskUSD', options.budgetTaskUsd, '--budget-task-usd'],
+    ['scorerUSD', options.budgetScorerUsd, '--budget-scorer-usd'],
+    ['proposerUSD', options.budgetProposerUsd, '--budget-proposer-usd'],
+    ['architectUSD', options.budgetArchitectUsd, '--budget-architect-usd'],
+    ['pbtUSD', options.budgetPbtUsd, '--budget-pbt-usd'],
+  ];
+
+  for (const [field, value, flagName] of entries) {
+    const parsed = parseBudgetFlag(value, flagName);
+    if (parsed !== undefined) {
+      budgets[field] = parsed;
+    }
+  }
+  config.budgets = budgets;
+}
+
+function printForecastAndCheckBudget(
+  forecast: ReturnType<typeof forecastEvolveBudget>,
+  config: EvolveConfig,
+  allowOverBudget: boolean | undefined,
+): boolean {
+  console.log('');
+  for (const line of formatBudgetForecast(forecast)) {
+    console.log(chalk.dim(`  ${line}`));
+  }
+  for (const note of forecast.notes) {
+    console.log(chalk.dim(`  ${note}`));
+  }
+  console.log('');
+
+  const budgetCheck = checkEvolveBudgets(forecast, config.budgets);
+  if (budgetCheck.ok) return true;
+
+  console.log(ui.error('Budget forecast exceeds configured hard budget:'));
+  for (const line of formatBudgetViolations(budgetCheck.violations)) {
+    console.log(chalk.red(`  ${line}`));
+  }
+  if (!allowOverBudget) {
+    console.log(chalk.dim('  Re-run with --allow-over-budget to override this preflight gate.'));
+    process.exit(1);
+    return false;
+  }
+  console.log(chalk.yellow('  Proceeding because --allow-over-budget was provided.'));
+  return true;
+}
+
+interface BudgetFlagOptions {
+  budgetRunUsd?: string;
+  budgetTaskUsd?: string;
+  budgetScorerUsd?: string;
+  budgetProposerUsd?: string;
+  budgetArchitectUsd?: string;
+  budgetPbtUsd?: string;
+}
 
 /**
  * Load EvolveConfig from a workspace's config.yaml.
@@ -64,6 +163,7 @@ export async function loadEvolveConfigFromWorkspace(workspacePath: string): Prom
       architectEvery: (parsed.architect_every as number) ?? DEFAULT_CONFIG.architectEvery,
       schedule: (parsed.schedule as EvolveConfig['schedule']) ?? DEFAULT_CONFIG.schedule,
       architectModel: (parsed.architect_model as string) ?? DEFAULT_CONFIG.architectModel,
+      budgets: readBudgetConfig(parsed),
     };
   } catch {
     return { ...DEFAULT_CONFIG };
@@ -232,8 +332,16 @@ evolveCommand
   .option('--architect-every <n>', 'Run architect proposer every N iterations (default: 3)')
   .option('--schedule <type>', 'Architect schedule: explore-exploit, constant, or adaptive (default: explore-exploit)')
   .option('--architect-model <model>', 'Model for architect proposer (defaults to proposer model)')
+  .option('--budget-run-usd <usd>', 'Hard budget for the full evolve run forecast')
+  .option('--budget-task-usd <usd>', 'Hard budget for one task evaluation forecast')
+  .option('--budget-scorer-usd <usd>', 'Hard budget for scorer call forecast')
+  .option('--budget-proposer-usd <usd>', 'Hard budget for proposer call forecast')
+  .option('--budget-architect-usd <usd>', 'Hard budget for architect call forecast')
+  .option('--budget-pbt-usd <usd>', 'Hard budget for PBT forecast')
+  .option('--allow-over-budget', 'Run even when the preflight forecast exceeds a hard budget')
+  .option('--dry-run', 'Print the budget forecast and exit before running expensive work')
   .option('-i, --interactive', 'Configure evolution settings interactively')
-  .action(async (options: { task?: string; iterations?: string; runs?: string; parallel?: string; maxMutations?: string; pruneThreshold?: string; maxTaskDrop?: string; principal?: boolean; evalSample?: string; sampling?: string; klLambda?: string; architectEvery?: string; schedule?: string; architectModel?: string; interactive?: boolean }) => {
+  .action(async (options: BudgetFlagOptions & { task?: string; iterations?: string; runs?: string; parallel?: string; maxMutations?: string; pruneThreshold?: string; maxTaskDrop?: string; principal?: boolean; evalSample?: string; sampling?: string; klLambda?: string; architectEvery?: string; schedule?: string; architectModel?: string; allowOverBudget?: boolean; dryRun?: boolean; interactive?: boolean }) => {
     try {
       const projectRoot = process.cwd();
       const workspace = path.join(projectRoot, '.kairn-evolve');
@@ -269,6 +377,19 @@ evolveCommand
         if (tasksToRun.length === 0) {
           console.log(ui.error(`Task "${options.task}" not found in tasks.yaml`));
           process.exit(1);
+        }
+
+        const evolveConfig = await loadEvolveConfigFromWorkspace(workspace);
+        evolveConfig.maxIterations = 1;
+        evolveConfig.runsPerTask = 1;
+        applyBudgetFlags(evolveConfig, options);
+        const forecast = forecastEvolveBudget(tasksToRun, evolveConfig);
+        if (!printForecastAndCheckBudget(forecast, evolveConfig, options.allowOverBudget)) {
+          return;
+        }
+        if (options.dryRun) {
+          console.log(ui.success('Dry run complete. No tasks were executed.'));
+          return;
         }
 
         console.log(ui.info(`Running ${tasksToRun.length} task(s)...`));
@@ -313,7 +434,11 @@ evolveCommand
           options.principal || options.evalSample !== '0' ||
           options.sampling !== 'thompson' || options.klLambda !== '0.1' ||
           options.architectEvery !== undefined || options.schedule !== undefined ||
-          options.architectModel !== undefined;
+          options.architectModel !== undefined ||
+          options.budgetRunUsd !== undefined || options.budgetTaskUsd !== undefined ||
+          options.budgetScorerUsd !== undefined || options.budgetProposerUsd !== undefined ||
+          options.budgetArchitectUsd !== undefined || options.budgetPbtUsd !== undefined ||
+          options.allowOverBudget || options.dryRun;
 
         if (!hasExplicitFlags) {
           // Interactive configuration menu
@@ -461,6 +586,17 @@ evolveCommand
           }
         }
 
+        applyBudgetFlags(evolveConfig, options);
+
+        const forecast = forecastEvolveBudget(parsed.tasks, evolveConfig);
+        if (!printForecastAndCheckBudget(forecast, evolveConfig, options.allowOverBudget)) {
+          return;
+        }
+        if (options.dryRun) {
+          console.log(ui.success('Dry run complete. No tasks were executed.'));
+          return;
+        }
+
         // Verify baseline exists
         try {
           await fs.access(path.join(workspace, 'iterations', '0', 'harness'));
@@ -594,7 +730,15 @@ evolveCommand
   .option('--sampling <strategy>', 'Task sampling strategy: thompson or uniform', 'thompson')
   .option('--kl-lambda <n>', 'KL regularization strength (0 = disabled)', '0.1')
   .option('--eval-sample <n>', 'Sample N tasks per middle iteration (0 = all)', '5')
-  .action(async (options: { branches?: string; iterations?: string; parallel?: string; sampling?: string; klLambda?: string; evalSample?: string }) => {
+  .option('--budget-run-usd <usd>', 'Hard budget for each branch run forecast')
+  .option('--budget-task-usd <usd>', 'Hard budget for one task evaluation forecast')
+  .option('--budget-scorer-usd <usd>', 'Hard budget for scorer call forecast')
+  .option('--budget-proposer-usd <usd>', 'Hard budget for proposer call forecast')
+  .option('--budget-architect-usd <usd>', 'Hard budget for architect call forecast')
+  .option('--budget-pbt-usd <usd>', 'Hard budget for the full PBT forecast')
+  .option('--allow-over-budget', 'Run even when the preflight forecast exceeds a hard budget')
+  .option('--dry-run', 'Print the budget forecast and exit before running expensive work')
+  .action(async (options: BudgetFlagOptions & { branches?: string; iterations?: string; parallel?: string; sampling?: string; klLambda?: string; evalSample?: string; allowOverBudget?: boolean; dryRun?: boolean }) => {
     try {
       const projectRoot = process.cwd();
       const workspace = path.join(projectRoot, '.kairn-evolve');
@@ -635,6 +779,7 @@ evolveCommand
       if (sampling === 'thompson' || sampling === 'uniform') {
         evolveConfig.samplingStrategy = sampling;
       }
+      applyBudgetFlags(evolveConfig, options);
 
       // Load tasks
       const tasksPath = path.join(workspace, 'tasks.yaml');
@@ -643,6 +788,15 @@ evolveCommand
       if (!parsed?.tasks || parsed.tasks.length === 0) {
         console.log(ui.error('No tasks found in tasks.yaml'));
         process.exit(1);
+      }
+
+      const forecast = forecastEvolveBudget(parsed.tasks, evolveConfig, { pbtBranches: numBranches });
+      if (!printForecastAndCheckBudget(forecast, evolveConfig, options.allowOverBudget)) {
+        return;
+      }
+      if (options.dryRun) {
+        console.log(ui.success('Dry run complete. No branches were executed.'));
+        return;
       }
 
       console.log(chalk.dim(`  Branches: ${numBranches}, Iterations: ${evolveConfig.maxIterations}, Parallel: ${evolveConfig.parallelTasks}`));
