@@ -1,5 +1,5 @@
 // Eval templates
-import type { EvolveTelemetry } from './cost.js';
+import type { EvolveTelemetry, PhaseCostSummary, TelemetryPhase } from './cost.js';
 
 export type EvalTemplate = 'add-feature' | 'fix-bug' | 'refactor' | 'test-writing' | 'config-change' | 'documentation' | 'convention-adherence' | 'workflow-compliance' | 'rule-compliance' | 'intent-routing' | 'persistence-completion' | 'real-bug-fix' | 'real-feature-add' | 'codebase-question';
 
@@ -299,6 +299,7 @@ export interface EvolutionReport {
     telemetry?: EvolveTelemetry;
     usage?: EvolveTelemetry['usage'];
     cost?: EvolveTelemetry['cost'];
+    costByPhase?: Partial<Record<TelemetryPhase, PhaseCostSummary>>;
     categoryBreakdown?: CategoryBreakdown;
   };
   iterations: Array<{

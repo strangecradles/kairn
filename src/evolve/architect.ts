@@ -6,10 +6,11 @@
  * It runs on a configurable schedule interleaved with the reactive proposer.
  */
 
-import { callLLM } from '../llm.js';
+import { callEvolveLLM } from './execution-meter.js';
 import { readHarnessFiles, parseProposerResponse, formatAnalysisForProposer } from './proposer.js';
 import { loadIterationTraces } from './trace.js';
 import type { ProjectContext } from './proposer.js';
+import type { ExecutionMeter } from './execution-meter.js';
 import type { Task, Trace, IterationLog, ArchitectProposal } from './types.js';
 import type { KairnConfig } from '../types.js';
 
@@ -379,6 +380,7 @@ export async function proposeArchitecture(
   architectModel: string,
   knowledgeContext?: string,
   projectContext?: ProjectContext,
+  meter?: ExecutionMeter,
 ): Promise<ArchitectProposal> {
   const harnessFiles = await readHarnessFiles(harnessPath);
   const traces = await loadIterationTraces(workspacePath, iteration);
@@ -405,11 +407,16 @@ export async function proposeArchitecture(
   );
 
   const architectConfig: KairnConfig = { ...config, model: architectModel };
-  const response = await callLLM(architectConfig, userMessage, {
+  const response = await callEvolveLLM(architectConfig, userMessage, {
     systemPrompt: ARCHITECT_SYSTEM_PROMPT,
     maxTokens: 16384,
     jsonMode: true,
     cacheControl: true,
+  }, meter, {
+    phase: 'architect',
+    model: architectModel,
+    budgetField: 'architectUSD',
+    source: 'architect',
   });
 
   const base = parseProposerResponse(response);

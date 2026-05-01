@@ -1,7 +1,8 @@
 import { execCommand } from './exec.js';
-import { callLLM } from '../llm.js';
+import { callEvolveLLM } from './execution-meter.js';
 import type { KairnConfig } from '../types.js';
 import type { Task, Score } from './types.js';
+import type { ExecutionMeter } from './execution-meter.js';
 
 /** Pattern to identify lines that look like shell commands. */
 const COMMAND_PATTERN =
@@ -253,6 +254,7 @@ export async function llmJudgeScorer(
   stdout: string,
   stderr: string,
   config: KairnConfig,
+  meter?: ExecutionMeter,
 ): Promise<Score> {
   const expectedOutcome = Array.isArray(task.expected_outcome)
     ? task.expected_outcome.join('\n')
@@ -273,10 +275,14 @@ export async function llmJudgeScorer(
   ].join('\n');
 
   try {
-    const response = await callLLM(config, userMessage, {
+    const response = await callEvolveLLM(config, userMessage, {
       systemPrompt: JUDGE_SYSTEM_PROMPT,
       maxTokens: 1024,
       cacheControl: true,
+    }, meter, {
+      phase: 'scorer',
+      budgetField: 'scorerUSD',
+      source: 'llm-judge',
     });
 
     // Parse JSON response, stripping markdown code fences if present
@@ -319,6 +325,7 @@ export async function rubricScorer(
   stdout: string,
   stderr: string,
   config: KairnConfig,
+  meter?: ExecutionMeter,
 ): Promise<Score> {
   if (!task.rubric || task.rubric.length === 0) {
     return passFailScorer(task, workspacePath, stdout, stderr);
@@ -362,10 +369,14 @@ export async function rubricScorer(
     ].join('\n');
 
     try {
-      const response = await callLLM(config, userMessage, {
+      const response = await callEvolveLLM(config, userMessage, {
         systemPrompt: RUBRIC_SYSTEM_PROMPT,
         maxTokens: 512,
         cacheControl: true,
+      }, meter, {
+        phase: 'scorer',
+        budgetField: 'scorerUSD',
+        source: 'rubric-scorer',
       });
 
       let cleaned = response.trim();
@@ -476,14 +487,15 @@ export async function scoreTask(
   stdout: string,
   stderr: string,
   config?: KairnConfig,
+  meter?: ExecutionMeter,
 ): Promise<Score> {
   let score: Score;
   if (task.scoring === 'pass-fail') {
     score = await passFailScorer(task, workspacePath, stdout, stderr);
   } else if (task.scoring === 'llm-judge' && config) {
-    score = await llmJudgeScorer(task, workspacePath, stdout, stderr, config);
+    score = await llmJudgeScorer(task, workspacePath, stdout, stderr, config, meter);
   } else if (task.scoring === 'rubric' && config) {
-    score = await rubricScorer(task, workspacePath, stdout, stderr, config);
+    score = await rubricScorer(task, workspacePath, stdout, stderr, config, meter);
   } else {
     score = await passFailScorer(task, workspacePath, stdout, stderr);
   }

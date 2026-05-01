@@ -4,6 +4,7 @@ import { evaluateAll } from './runner.js';
 import { propose, buildIRSummary } from './proposer.js';
 import { applyMutations } from './mutator.js';
 import { writeIterationLog } from './trace.js';
+import { ExecutionMeter, writeExecutionLedger } from './execution-meter.js';
 import { copyDir } from './baseline.js';
 import { proposeArchitecture } from './architect.js';
 import { shouldUseArchitect, computeArchitectMutationBudget } from './schedule.js';
@@ -146,6 +147,7 @@ export async function evolve(
   let bestScore = -1;
   let bestIteration = 0;
   let baselineScore = 0;
+  const meter = new ExecutionMeter(evolveConfig.budgets);
 
   // Thompson Sampling: initialize or load beliefs
   const useThompson = evolveConfig.samplingStrategy === 'thompson' && evolveConfig.evalSampleSize > 0;
@@ -188,6 +190,7 @@ export async function evolve(
   };
 
   for (let iter = 0; iter < evolveConfig.maxIterations; iter++) {
+    const iterCheckpoint = meter.checkpoint();
     const harnessPath = path.join(
       workspacePath,
       'iterations',
@@ -301,6 +304,7 @@ export async function evolve(
       onProgress,
       evolveConfig.runsPerTask,
       evolveConfig.parallelTasks,
+      meter,
     );
 
     // Merge carried-forward scores with evaluated results
@@ -406,7 +410,7 @@ export async function evolve(
         timestamp: new Date().toISOString(),
         rawScore: useKL ? rawAggregate : undefined,
         complexityCost: iterComplexityCost,
-        telemetry: evalTelemetry,
+        telemetry: meter.aggregateSince(iterCheckpoint, 'iteration'),
         source: 'reactive',
       };
       await writeIterationLog(workspacePath, rollbackLog);
@@ -437,6 +441,7 @@ export async function evolve(
             kairnConfig,
             evolveConfig.proposerModel,
             rollbackProjectCtx,
+            meter,
           );
           const rollbackCap = computeMutationCap(iter, evolveConfig.maxIterations, evolveConfig.maxMutationsPerIteration);
           if (rollbackProposal.mutations.length > rollbackCap) {
@@ -485,7 +490,7 @@ export async function evolve(
         timestamp: new Date().toISOString(),
         rawScore: useKL ? rawAggregate : undefined,
         complexityCost: iterComplexityCost,
-        telemetry: evalTelemetry,
+        telemetry: meter.aggregateSince(iterCheckpoint, 'iteration'),
         source: 'reactive',
       };
       await writeIterationLog(workspacePath, perfectLog);
@@ -504,7 +509,7 @@ export async function evolve(
         timestamp: new Date().toISOString(),
         rawScore: useKL ? rawAggregate : undefined,
         complexityCost: iterComplexityCost,
-        telemetry: evalTelemetry,
+        telemetry: meter.aggregateSince(iterCheckpoint, 'iteration'),
         source: 'reactive',
       };
       await writeIterationLog(workspacePath, finalLog);
@@ -541,6 +546,7 @@ export async function evolve(
           evolveConfig.architectModel,
           undefined,
           architectProjectCtx,
+          meter,
         );
         // Enforce architect mutation budget
         const architectCap = computeArchitectMutationBudget(iter, evolveConfig.maxIterations);
@@ -569,7 +575,7 @@ export async function evolve(
           timestamp: new Date().toISOString(),
           rawScore: useKL ? rawAggregate : undefined,
           complexityCost: iterComplexityCost,
-          telemetry: evalTelemetry,
+          telemetry: meter.aggregateSince(iterCheckpoint, 'iteration'),
           source: 'architect',
         };
         await writeIterationLog(workspacePath, skipLog);
@@ -602,7 +608,7 @@ export async function evolve(
           timestamp: new Date().toISOString(),
           rawScore: useKL ? rawAggregate : undefined,
           complexityCost: iterComplexityCost,
-          telemetry: evalTelemetry,
+          telemetry: meter.aggregateSince(iterCheckpoint, 'iteration'),
           source: 'architect',
         };
         await writeIterationLog(workspacePath, rejectLog);
@@ -621,6 +627,7 @@ export async function evolve(
         onProgress,
         evolveConfig.runsPerTask,
         evolveConfig.parallelTasks,
+        meter,
       );
 
       if (stagingScore >= bestScore) {
@@ -645,7 +652,7 @@ export async function evolve(
         timestamp: new Date().toISOString(),
         rawScore: useKL ? rawAggregate : undefined,
         complexityCost: iterComplexityCost,
-        telemetry: stagingScore >= bestScore ? stagingTelemetry : evalTelemetry,
+        telemetry: meter.aggregateSince(iterCheckpoint, 'iteration'),
         source: 'architect',
       };
       await writeIterationLog(workspacePath, architectLog);
@@ -673,6 +680,7 @@ export async function evolve(
         kairnConfig,
         evolveConfig.proposerModel,
         iterProjectCtx,
+        meter,
       );
       // Enforce mutation cap
       const iterCap = computeMutationCap(iter, evolveConfig.maxIterations, evolveConfig.maxMutationsPerIteration);
@@ -705,7 +713,7 @@ export async function evolve(
         timestamp: new Date().toISOString(),
         rawScore: useKL ? rawAggregate : undefined,
         complexityCost: iterComplexityCost,
-        telemetry: evalTelemetry,
+        telemetry: meter.aggregateSince(iterCheckpoint, 'iteration'),
         source: 'reactive',
       };
       await writeIterationLog(workspacePath, skipLog);
@@ -757,7 +765,7 @@ export async function evolve(
       timestamp: new Date().toISOString(),
       rawScore: useKL ? rawAggregate : undefined,
       complexityCost: iterComplexityCost,
-      telemetry: evalTelemetry,
+      telemetry: meter.aggregateSince(iterCheckpoint, 'iteration'),
       source: 'reactive',
     };
     await writeIterationLog(workspacePath, iterLog);
@@ -766,6 +774,7 @@ export async function evolve(
 
   // PRINCIPAL PROPOSER: after normal loop, synthesize the best harness from all learnings
   if (evolveConfig.usePrincipal && history.length >= 2) {
+    const principalCheckpoint = meter.checkpoint();
     onProgress?.({ type: 'proposing', iteration: history.length, message: 'Principal Proposer synthesizing final harness' });
 
     const baselineHarnessPath = path.join(workspacePath, 'iterations', '0', 'harness');
@@ -783,6 +792,7 @@ export async function evolve(
         kairnConfig,
         evolveConfig.proposerModel,
         principalProjectCtx,
+        meter,
       );
 
       // Principal has full history — no mutation cap. Let it propose freely.
@@ -792,7 +802,7 @@ export async function evolve(
       const mutResult = await applyMutations(baselineHarnessPath, principalIterDir, principalProposal.mutations);
 
       onProgress?.({ type: 'iteration-start', iteration: principalIterNum });
-      const { results: principalResults, aggregate: principalAggregate, telemetry: principalTelemetry } = await evaluateAll(
+      const { results: principalResults, aggregate: principalAggregate } = await evaluateAll(
         tasks,
         mutResult.newHarnessPath,
         workspacePath,
@@ -801,6 +811,7 @@ export async function evolve(
         onProgress,
         evolveConfig.runsPerTask,
         evolveConfig.parallelTasks,
+        meter,
       );
       onProgress?.({ type: 'iteration-scored', iteration: principalIterNum, score: principalAggregate });
 
@@ -811,7 +822,7 @@ export async function evolve(
         proposal: principalProposal,
         diffPatch: mutResult.diffPatch,
         timestamp: new Date().toISOString(),
-        telemetry: principalTelemetry,
+        telemetry: meter.aggregateSince(principalCheckpoint, 'iteration'),
       };
       await writeIterationLog(workspacePath, principalLog);
       history.push(principalLog);
@@ -849,6 +860,8 @@ export async function evolve(
     iteration: history.length > 0 ? history.length - 1 : 0,
     score: bestScore,
   });
+
+  await writeExecutionLedger(workspacePath, meter);
 
   return {
     iterations: history,

@@ -1,6 +1,6 @@
 import fs from 'fs/promises';
 import path from 'path';
-import { callLLM } from '../llm.js';
+import { callEvolveLLM, ExecutionMeter } from './execution-meter.js';
 import { readHarnessFiles } from './proposer.js';
 import { parseProposerResponse } from './proposer.js';
 import { applyMutations } from './mutator.js';
@@ -162,6 +162,7 @@ export async function synthesizeBranches(
   context: SynthesisContext,
   kairnConfig: KairnConfig,
   evolveConfig: EvolveConfig,
+  meter?: ExecutionMeter,
 ): Promise<{ mutations: Mutation[]; reasoning: string }> {
   const userMessage = buildSynthesisPrompt(context);
   const systemPrompt = buildMetaPrincipalSystemPrompt(context.branches.length);
@@ -175,11 +176,15 @@ export async function synthesizeBranches(
   const fullMessage = `## Current Baseline Harness Files\n\n${harnessSection}\n\n${userMessage}`;
 
   const proposerConfig: KairnConfig = { ...kairnConfig, model: evolveConfig.proposerModel };
-  const response = await callLLM(proposerConfig, fullMessage, {
+  const response = await callEvolveLLM(proposerConfig, fullMessage, {
     systemPrompt,
     maxTokens: 8192,
     jsonMode: true,
     cacheControl: true,
+  }, meter, {
+    phase: 'synthesis',
+    model: evolveConfig.proposerModel,
+    source: 'synthesis',
   });
 
   const proposal = parseProposerResponse(response);
@@ -203,6 +208,7 @@ export async function evaluateSynthesis(
   tasks: Task[],
   workspacePath: string,
   kairnConfig: KairnConfig,
+  meter?: ExecutionMeter,
 ): Promise<{ results: Record<string, Score>; aggregate: number }> {
   const synthesisIterNum = 999; // Distinguishes synthesis eval from branch evals
   return evaluateAll(
@@ -214,6 +220,7 @@ export async function evaluateSynthesis(
     undefined,
     1,  // single run per task for synthesis
     2,  // moderate parallelism
+    meter,
   );
 }
 
@@ -232,10 +239,12 @@ export async function runSynthesis(
   kairnConfig: KairnConfig,
   evolveConfig: EvolveConfig,
   workspacePath: string,
+  meter?: ExecutionMeter,
 ): Promise<{ result: { results: Record<string, Score>; aggregate: number }; mutations: Mutation[]; reasoning: string } | null> {
   try {
     // 1. Call Meta-Principal
-    const { mutations, reasoning } = await synthesizeBranches(context, kairnConfig, evolveConfig);
+    const effectiveMeter = meter ?? new ExecutionMeter(evolveConfig.budgets);
+    const { mutations, reasoning } = await synthesizeBranches(context, kairnConfig, evolveConfig, effectiveMeter);
 
     if (mutations.length === 0) {
       return null;
@@ -255,6 +264,7 @@ export async function runSynthesis(
       context.tasks,
       workspacePath,
       kairnConfig,
+      effectiveMeter,
     );
 
     return { result: evalResult, mutations, reasoning };

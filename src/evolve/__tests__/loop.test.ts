@@ -213,6 +213,7 @@ describe('evolve', () => {
       undefined,
       1,
       1,
+      expect.any(Object),
     );
   });
 

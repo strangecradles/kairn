@@ -1,11 +1,12 @@
 import fs from 'fs/promises';
 import path from 'path';
-import { callLLM } from '../llm.js';
+import { callEvolveLLM } from './execution-meter.js';
 import { loadIterationTraces } from './trace.js';
 import type { Task, Trace, Proposal, Mutation, IterationLog } from './types.js';
 import type { KairnConfig } from '../types.js';
 import type { HarnessIR, SettingsIR } from '../ir/types.js';
 import type { ProjectAnalysis } from '../analyzer/types.js';
+import type { ExecutionMeter } from './execution-meter.js';
 
 /**
  * Context about the project being optimized, injected into the proposer
@@ -603,6 +604,7 @@ export async function propose(
   config: KairnConfig,
   proposerModel: string,
   projectContext?: ProjectContext,
+  meter?: ExecutionMeter,
 ): Promise<Proposal> {
   const harnessFiles = await readHarnessFiles(harnessPath);
   const traces = await loadIterationTraces(workspacePath, iteration);
@@ -625,11 +627,16 @@ export async function propose(
 
   // Override model with proposer-specific model
   const proposerConfig: KairnConfig = { ...config, model: proposerModel };
-  const response = await callLLM(proposerConfig, userMessage, {
+  const response = await callEvolveLLM(proposerConfig, userMessage, {
     systemPrompt: PROPOSER_SYSTEM_PROMPT,
     maxTokens: 8192,
     jsonMode: true,
     cacheControl: true,
+  }, meter, {
+    phase: 'proposer',
+    model: proposerModel,
+    budgetField: 'proposerUSD',
+    source: 'proposer',
   });
 
   return parseProposerResponse(response);

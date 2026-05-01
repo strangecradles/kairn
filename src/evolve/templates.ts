@@ -1,4 +1,4 @@
-import { callLLM } from '../llm.js';
+import { callEvolveLLM } from './execution-meter.js';
 import type { KairnConfig } from '../types.js';
 import type { ProjectAnalysis } from '../analyzer/types.js';
 import type { EvalTemplate, ProjectProfileSummary, Task, TemplateCategory } from './types.js';
@@ -404,9 +404,12 @@ export async function generateTasksFromTemplates(
 ): Promise<Task[]> {
   const userMessage = buildTaskGenerationMessage(claudeMd, projectProfile, templates, analysis);
 
-  const rawResponse = await callLLM(config, userMessage, {
+  const rawResponse = await callEvolveLLM(config, userMessage, {
     systemPrompt: TASK_GENERATION_PROMPT,
     maxTokens: 4096,
+  }, undefined, {
+    phase: 'task-generation',
+    source: 'task-generation',
   });
 
   const parsed = parseJsonResponse(rawResponse);

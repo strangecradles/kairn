@@ -6,7 +6,8 @@ import path from 'path';
 import { copyDir } from './baseline.js';
 import { writeTrace } from './trace.js';
 import { scoreTask } from './scorers.js';
-import { aggregateTelemetry, estimateCost, estimateTelemetry } from './cost.js';
+import { aggregateTelemetry, estimateTelemetry } from './cost.js';
+import { ExecutionMeter, telemetryFromUsage } from './execution-meter.js';
 import type { KairnConfig } from '../types.js';
 import type { Task, TaskResult, Trace, Score, LoopProgressEvent, SpawnResult } from './types.js';
 import type { EvolveTelemetry } from './cost.js';
@@ -22,6 +23,7 @@ export interface RunTaskOptions {
   model?: string;
   maxTurns?: number;
   maxBudgetUsd?: number;
+  meter?: ExecutionMeter;
 }
 
 export interface SpawnClaudeOptions {
@@ -170,7 +172,8 @@ export async function runTask(
   const startedAt = new Date().toISOString();
   const startMs = Date.now();
 
-  const { projectRoot, config, maxTurns, maxBudgetUsd } = normalizeRunTaskOptions(options);
+  const { projectRoot, config, maxTurns, maxBudgetUsd, meter } = normalizeRunTaskOptions(options);
+  const effectiveMeter = meter ?? new ExecutionMeter();
   const model = config?.model ?? (typeof options === 'object' ? options.model : undefined) ?? legacyModel;
   const root = projectRoot ?? process.cwd();
   const { workDir, isWorktree } = await createIsolatedWorkspace(root, harnessPath);
@@ -193,11 +196,31 @@ export async function runTask(
     const filesBefore = await snapshotFileList(workDir);
 
     // Spawn claude CLI
-    const spawnResult = await spawnClaude(task.description, workDir, task.timeout, {
-      model,
-      maxTurns,
-      maxBudgetUsd,
-    });
+    const meteredSpawn = await effectiveMeter.run(
+      {
+        phase: 'task-execution',
+        model,
+        inputText: task.description,
+        source: 'claude-cli',
+        budgetField: 'taskUSD',
+        deriveTelemetry: (result, durationMs) => result.usage
+          ? telemetryFromActualUsage(model, durationMs, result.usage)
+          : estimateTelemetry({
+              phase: 'task-execution',
+              model,
+              durationMs,
+              inputText: task.description,
+              outputText: `${result.stdout}\n${result.stderr}`,
+              source: 'claude-cli-text-estimate',
+            }),
+      },
+      () => spawnClaude(task.description, workDir, task.timeout, {
+        model,
+        maxTurns,
+        maxBudgetUsd,
+      }),
+    );
+    const spawnResult = meteredSpawn.result;
 
     // Diff files to detect changes
     const filesAfter = await snapshotFileList(workDir);
@@ -207,16 +230,7 @@ export async function runTask(
 
     const completedAt = new Date().toISOString();
     const durationMs = Date.now() - startMs;
-    const telemetry = spawnResult.usage
-      ? telemetryFromActualUsage(model, durationMs, spawnResult.usage)
-      : estimateTelemetry({
-          phase: 'task-execution',
-          model,
-          durationMs,
-          inputText: task.description,
-          outputText: `${spawnResult.stdout}\n${spawnResult.stderr}`,
-          source: 'claude-cli-text-estimate',
-        });
+    const telemetry = meteredSpawn.telemetry;
 
     // Build trace
     const combinedStderr = setupStderr
@@ -224,7 +238,7 @@ export async function runTask(
       : spawnResult.stderr;
 
     const score = config
-      ? await scoreTask(task, workDir, spawnResult.stdout, combinedStderr, config)
+      ? await scoreTask(task, workDir, spawnResult.stdout, combinedStderr, config, effectiveMeter)
       : { pass: false, details: 'Pending scoring' };
 
     const trace: Trace = {
@@ -349,21 +363,13 @@ function telemetryFromActualUsage(
   durationMs: number,
   usage: EvolveTelemetry['usage'],
 ): EvolveTelemetry {
-  const inputTokens = usage.inputTokens ?? 0;
-  const outputTokens = usage.outputTokens ?? 0;
-  return {
+  return telemetryFromUsage({
     phase: 'task-execution',
     model,
     durationMs,
     usage,
-    cost: {
-      status: 'estimated',
-      estimatedUSD: estimateCost(inputTokens, outputTokens, model),
-      currency: 'USD',
-      source: 'src/evolve/cost.ts',
-      reason: 'Estimated from actual Claude Code token usage and configured model pricing',
-    },
-  };
+    sourceReason: 'Estimated from actual Claude Code token usage and configured model pricing',
+  });
 }
 
 /**
@@ -677,6 +683,7 @@ export async function evaluateAll(
   onProgress?: (event: LoopProgressEvent) => void,
   runsPerTask: number = 1,
   parallelTasks: number = 1,
+  meter?: ExecutionMeter,
 ): Promise<{ results: Record<string, Score>; aggregate: number; telemetry?: EvolveTelemetry }> {
   const results: Record<string, Score> = {};
   const telemetryEntries: NonNullable<TaskResult['telemetry']>[] = [];
@@ -713,7 +720,7 @@ export async function evaluateAll(
           harnessPath,
           traceDir,
           iteration,
-          { projectRoot, config },
+          { projectRoot, config, meter },
         );
         if (taskResult.telemetry) telemetryEntries.push(taskResult.telemetry);
         const score = taskResult.score;
@@ -749,7 +756,7 @@ export async function evaluateAll(
         harnessPath,
         traceDir,
         iteration,
-        { projectRoot, config },
+        { projectRoot, config, meter },
       );
       if (taskResult.telemetry) telemetryEntries.push(taskResult.telemetry);
 

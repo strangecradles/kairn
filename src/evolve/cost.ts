@@ -28,7 +28,15 @@ export type UsageStatus = 'actual' | 'estimated' | 'unavailable';
 
 export type CostStatus = 'estimated' | 'unavailable';
 
-export type TelemetryPhase = 'task-execution' | 'iteration' | 'report';
+export type TelemetryPhase =
+  | 'task-execution'
+  | 'scorer'
+  | 'proposer'
+  | 'architect'
+  | 'synthesis'
+  | 'task-generation'
+  | 'iteration'
+  | 'report';
 
 export interface UsageTelemetry {
   status: UsageStatus;
@@ -53,6 +61,15 @@ export interface EvolveTelemetry {
   durationMs: number;
   usage: UsageTelemetry;
   cost: CostTelemetry;
+}
+
+export interface PhaseCostSummary {
+  phase: TelemetryPhase;
+  calls: number;
+  durationMs: number;
+  usage: UsageTelemetry;
+  cost: CostTelemetry;
+  models: string[];
 }
 
 export interface IterationCost {
@@ -207,6 +224,34 @@ export function aggregateTelemetry(
       reason: 'Aggregated from per-attempt estimated USD values',
     },
   };
+}
+
+export function aggregateCostByPhase(
+  entries: Array<EvolveTelemetry | undefined>,
+): Partial<Record<TelemetryPhase, PhaseCostSummary>> {
+  const grouped = new Map<TelemetryPhase, EvolveTelemetry[]>();
+
+  for (const entry of entries) {
+    if (!entry) continue;
+    const phaseEntries = grouped.get(entry.phase) ?? [];
+    phaseEntries.push(entry);
+    grouped.set(entry.phase, phaseEntries);
+  }
+
+  const summary: Partial<Record<TelemetryPhase, PhaseCostSummary>> = {};
+  for (const [phase, phaseEntries] of grouped.entries()) {
+    const telemetry = aggregateTelemetry(phaseEntries, phase);
+    summary[phase] = {
+      phase,
+      calls: phaseEntries.length,
+      durationMs: telemetry.durationMs,
+      usage: telemetry.usage,
+      cost: telemetry.cost,
+      models: Array.from(new Set(phaseEntries.map(entry => entry.model))).sort(),
+    };
+  }
+
+  return summary;
 }
 
 /**

@@ -3,6 +3,7 @@ import fs from 'fs/promises';
 import path from 'path';
 import { generateMarkdownReport, generateJsonReport } from '../report.js';
 import { stringify as yamlStringify } from 'yaml';
+import { estimateTelemetry } from '../cost.js';
 import type { EvolveTelemetry } from '../cost.js';
 
 // ---------------------------------------------------------------------------
@@ -149,6 +150,33 @@ describe('generateMarkdownReport', () => {
     expect(md).toContain('baseline');
   });
 
+  it('aggregates cost by phase in markdown reports', async () => {
+    const proposerTelemetry = estimateTelemetry({
+      phase: 'proposer',
+      model: 'claude-sonnet-4-6',
+      durationMs: 12,
+      inputText: 'prompt',
+      outputText: 'proposal',
+      source: 'test',
+    });
+    const workspace = await createWorkspace({
+      iterations: [
+        {
+          iteration: 0,
+          score: 60,
+          taskResults: { 'task-1': { pass: false, score: 60 } },
+          telemetry: proposerTelemetry,
+        },
+      ],
+      tasks: [{ id: 'task-1', template: 'add-feature', description: 'Add feature' }],
+    });
+
+    const md = await generateMarkdownReport(workspace);
+
+    expect(md).toContain('## Cost by Phase');
+    expect(md).toContain('| proposer | 1 |');
+  });
+
   it('includes leaderboard table', async () => {
     const workspace = await createWorkspace({
       iterations: [
@@ -222,6 +250,33 @@ describe('generateJsonReport', () => {
     expect(report.overview.bestScore).toBe(70);
     expect(report.overview.bestIteration).toBe(1);
     expect(report.overview.improvement).toBe(30);
+  });
+
+  it('aggregates cost by phase in JSON reports', async () => {
+    const scorerTelemetry = estimateTelemetry({
+      phase: 'scorer',
+      model: 'claude-sonnet-4-6',
+      durationMs: 8,
+      inputText: 'judge',
+      outputText: 'score',
+      source: 'test',
+    });
+    const workspace = await createWorkspace({
+      iterations: [
+        {
+          iteration: 0,
+          score: 50,
+          taskResults: { 'task-1': { pass: false, score: 50 } },
+          telemetry: scorerTelemetry,
+        },
+      ],
+      tasks: [{ id: 'task-1', template: 'add-feature', description: 'Task' }],
+    });
+
+    const report = await generateJsonReport(workspace);
+
+    expect(report.overview.costByPhase?.scorer?.calls).toBe(1);
+    expect(report.overview.costByPhase?.scorer?.cost.estimatedUSD).toBeGreaterThan(0);
   });
 
   it('iterations array has correct entries', async () => {

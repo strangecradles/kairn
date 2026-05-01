@@ -2,7 +2,8 @@ import fs from 'fs/promises';
 import path from 'path';
 import { loadIterationLog } from './trace.js';
 import { diagnoseCounterfactuals } from './diagnosis.js';
-import { aggregateTelemetry, formatCost, formatTokens } from './cost.js';
+import { aggregateCostByPhase, aggregateTelemetry, formatCost, formatTokens } from './cost.js';
+import { loadExecutionLedger } from './execution-meter.js';
 import type {
   IterationLog,
   Task,
@@ -191,6 +192,10 @@ export async function generateMarkdownReport(workspacePath: string): Promise<str
     iterations.map(iter => iter.telemetry),
     'report',
   );
+  const ledgerEntries = await loadExecutionLedger(workspacePath);
+  const costByPhase = aggregateCostByPhase(
+    ledgerEntries.length > 0 ? ledgerEntries : iterations.map(iter => iter.telemetry),
+  );
 
   const lines: string[] = [];
 
@@ -219,6 +224,25 @@ export async function generateMarkdownReport(workspacePath: string): Promise<str
   }
 
   lines.push('');
+
+  const phaseRows = Object.values(costByPhase);
+  if (phaseRows.length > 0) {
+    lines.push('## Cost by Phase');
+    lines.push('');
+    lines.push('| Phase | Calls | Usage | Cost | Duration | Models |');
+    lines.push('|-------|-------|-------|------|----------|--------|');
+    for (const row of phaseRows) {
+      if (!row) continue;
+      const usage = row.usage.totalTokens === null
+        ? row.usage.status
+        : `${formatTokens(row.usage.totalTokens)} ${row.usage.status}`;
+      const cost = row.cost.estimatedUSD === null
+        ? row.cost.status
+        : `${formatCost(row.cost.estimatedUSD)} ${row.cost.status}`;
+      lines.push(`| ${row.phase} | ${row.calls} | ${usage} | ${cost} | ${row.durationMs}ms | ${row.models.join(', ')} |`);
+    }
+    lines.push('');
+  }
 
   // Iteration summary table
   lines.push('## Iterations');
@@ -337,6 +361,10 @@ export async function generateJsonReport(workspacePath: string): Promise<Evoluti
     iterations.map(iter => iter.telemetry),
     'report',
   );
+  const ledgerEntries = await loadExecutionLedger(workspacePath);
+  const costByPhase = aggregateCostByPhase(
+    ledgerEntries.length > 0 ? ledgerEntries : iterations.map(iter => iter.telemetry),
+  );
 
   // Compute category breakdown at best iteration
   const categoryBreakdown = bestIterLog
@@ -354,6 +382,7 @@ export async function generateJsonReport(workspacePath: string): Promise<Evoluti
       telemetry,
       usage: telemetry.usage,
       cost: telemetry.cost,
+      costByPhase,
       ...(categoryBreakdown ? { categoryBreakdown } : {}),
     },
     iterations: iterations.map(iter => {
