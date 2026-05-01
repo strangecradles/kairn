@@ -6,24 +6,19 @@ import fs from "fs/promises";
 import path from "path";
 import { loadConfig } from "../config.js";
 import { compile } from "../compiler/compile.js";
-import {
-  writeEnvironment,
-  summarizeSpec,
-  buildFileMap,
-} from "../adapter/claude-code.js";
-import { writeHermesEnvironment } from "../adapter/hermes-agent.js";
+import { summarizeSpec } from "../adapter/claude-code.js";
+import { formatRuntimeTargetList, type RuntimeAdapter } from "../adapter/registry.js";
 import { loadRegistry } from "../registry/loader.js";
-import { collectAndWriteKeys } from "../secrets.js";
-import type { RuntimeTarget } from "../types.js";
 import { scanProject } from "../scanner/scan.js";
 import type { ProjectProfile } from "../scanner/scan.js";
-import type { EnvironmentSpec } from "../types.js";
+import type { EnvironmentSpec, RegistryTool } from "../types.js";
 import { ui } from "../ui.js";
 import { printCompactBanner } from "../logo.js";
 import { analyzeProject } from "../analyzer/analyze.js";
 import { AnalysisError } from "../analyzer/types.js";
 import type { ProjectAnalysis } from "../analyzer/types.js";
 import { persistHarnessIR } from "../compiler/persist.js";
+import { resolveRuntimeAdapterForCommand, writeRuntimeEnvironment } from "./runtime-output.js";
 
 interface FileDiff {
   path: string;
@@ -57,8 +52,14 @@ function simpleDiff(oldContent: string, newContent: string): string[] {
 async function generateDiff(
   spec: EnvironmentSpec,
   targetDir: string,
+  adapter: RuntimeAdapter,
+  registry: RegistryTool[],
 ): Promise<FileDiff[]> {
-  const fileMap = buildFileMap(spec);
+  if (!adapter.buildFileMap) {
+    return [];
+  }
+
+  const fileMap = adapter.buildFileMap({ spec, registry, targetDir });
   const results: FileDiff[] = [];
 
   for (const [relativePath, newContent] of fileMap) {
@@ -236,13 +237,15 @@ export function buildOptimizeIntent(profile: ProjectProfile, analysis?: ProjectA
 }
 
 export const optimizeCommand = new Command("optimize")
-  .description("Scan an existing project and generate or optimize its Claude Code environment")
+  .description("Scan an existing project and generate or optimize an agent environment")
   .option("-y, --yes", "Skip confirmation prompts")
   .option("--audit-only", "Only audit the existing harness, don't generate changes")
   .option("--diff", "Preview changes as a diff without writing")
-  .option("--runtime <runtime>", "Target runtime (claude-code or hermes)", "claude-code")
+  .option("--runtime <runtime>", `Target runtime (${formatRuntimeTargetList()})`, "claude-code")
   .action(async (options: { yes?: boolean; auditOnly?: boolean; diff?: boolean; runtime?: string }) => {
     printCompactBanner();
+
+    const adapter = resolveRuntimeAdapterForCommand(options.runtime);
 
     const config = await loadConfig();
     if (!config) {
@@ -412,10 +415,22 @@ export const optimizeCommand = new Command("optimize")
     const hasEnvVars = summary.envSetup.length > 0;
 
     if (options.diff) {
-      const diffs = await generateDiff(spec, targetDir);
+      const diffs = await generateDiff(spec, targetDir, adapter, registry);
       const changedDiffs = diffs.filter((d) => d.status !== "unchanged");
 
-      if (changedDiffs.length === 0) {
+      if (!adapter.buildFileMap) {
+        console.log(ui.warn(`Diff preview is not available for ${adapter.displayName}.`));
+        const applyWithoutDiff =
+          options.yes ||
+          (await confirm({
+            message: "Apply changes without a diff preview?",
+            default: false,
+          }));
+        if (!applyWithoutDiff) {
+          console.log(chalk.dim("\n  Aborted.\n"));
+          return;
+        }
+      } else if (changedDiffs.length === 0) {
         console.log(ui.success("No changes needed — environment is already up to date."));
         console.log("");
         return;
@@ -444,37 +459,12 @@ export const optimizeCommand = new Command("optimize")
       }
     }
 
-    const runtime = (options.runtime ?? "claude-code") as RuntimeTarget;
-
-    if (runtime === "hermes") {
-      await writeHermesEnvironment(spec, registry);
-      console.log(ui.divider());
-      console.log(ui.success(`Ready! Run: $ hermes`));
-      console.log("");
-    } else {
-      const written = await writeEnvironment(spec, targetDir);
-
-      console.log(ui.section("Files Written"));
-      for (const file of written) {
-        console.log(ui.file(file));
-      }
-
-      // Interactive key collection after optimize
-      if (hasEnvVars) {
-        await collectAndWriteKeys(summary.envSetup, targetDir);
-        console.log("");
-      }
-
-      if (summary.pluginCommands.length > 0) {
-        console.log(ui.section("Plugins"));
-        for (const cmd of summary.pluginCommands) {
-          console.log(ui.cmd(cmd));
-        }
-        console.log("");
-      }
-
-      console.log(ui.divider());
-      console.log(ui.success("Ready! Run: $ claude"));
-      console.log("");
-    }
+    await writeRuntimeEnvironment({
+      adapter,
+      spec,
+      registry,
+      targetDir,
+      envSetup: hasEnvVars ? summary.envSetup : [],
+      pluginCommands: summary.pluginCommands,
+    });
   });

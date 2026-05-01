@@ -3,29 +3,31 @@ import { input, confirm, select } from "@inquirer/prompts";
 import chalk from "chalk";
 import { loadConfig } from "../config.js";
 import { generateClarifications, compile } from "../compiler/compile.js";
-import { writeEnvironment, summarizeSpec } from "../adapter/claude-code.js";
-import { writeHermesEnvironment } from "../adapter/hermes-agent.js";
+import { summarizeSpec } from "../adapter/claude-code.js";
+import { formatRuntimeTargetList } from "../adapter/registry.js";
 import { loadRegistry } from "../registry/loader.js";
 import { ui, createProgressRenderer, estimateTime } from "../ui.js";
 import { printFullBanner } from "../logo.js";
-import { collectAndWriteKeys, writeEmptyEnvFile } from "../secrets.js";
 import { autonomyLabel } from "../autonomy.js";
-import type { RuntimeTarget, Clarification, AutonomyLevel } from "../types.js";
+import type { Clarification, AutonomyLevel } from "../types.js";
 import { detectExistingRepo } from "./detect-existing-repo.js";
 import { persistHarnessIR } from "../compiler/persist.js";
+import { resolveRuntimeAdapterForCommand, writeRuntimeEnvironment } from "./runtime-output.js";
 
 export const describeCommand = new Command("describe")
-  .description("Describe your workflow and generate a Claude Code environment")
+  .description("Describe your workflow and generate an agent environment")
   .argument("[intent]", "What you want your agent to do")
   .option("-y, --yes", "Skip confirmation prompt")
   .option("-q, --quick", "Skip clarification questions")
-  .option("--runtime <runtime>", "Target runtime (claude-code or hermes)", "claude-code")
+  .option("--runtime <runtime>", `Target runtime (${formatRuntimeTargetList()})`, "claude-code")
   .action(async (
     intentArg: string | undefined,
     options: { yes?: boolean; quick?: boolean; runtime?: string }
   ) => {
     // 1. Banner
     printFullBanner("The Agent Environment Compiler");
+
+    const adapter = resolveRuntimeAdapterForCommand(options.runtime);
 
     // 2. Check config
     const config = await loadConfig();
@@ -198,45 +200,13 @@ export const describeCommand = new Command("describe")
 
     // 8. Write
     const targetDir = process.cwd();
-    const runtime = (options.runtime ?? "claude-code") as RuntimeTarget;
-
-    if (runtime === "hermes") {
-      await writeHermesEnvironment(spec, registry);
-      console.log("\n" + ui.success("Environment written for Hermes"));
-      console.log(
-        chalk.cyan("\n  Ready! Run ") + chalk.bold("hermes") + chalk.cyan(" to start.\n")
-      );
-    } else {
-      const hasEnvVars = summary.envSetup.length > 0;
-      const written = await writeEnvironment(spec, targetDir);
-
-      console.log(ui.section("Files Written"));
-      console.log("");
-      for (const file of written) {
-        console.log(ui.file(file));
-      }
-      // Handle .env file generation and key collection
-      if (hasEnvVars) {
-        if (options.quick) {
-          await writeEmptyEnvFile(summary.envSetup, targetDir);
-          console.log(ui.success("Empty .env written (gitignored) — fill in keys later: kairn keys"));
-        } else {
-          await collectAndWriteKeys(summary.envSetup, targetDir);
-        }
-        console.log("");
-      }
-
-      if (summary.pluginCommands.length > 0) {
-        console.log(ui.section("Plugins"));
-        console.log("");
-        for (const cmd of summary.pluginCommands) {
-          console.log(ui.cmd(cmd));
-        }
-        console.log("");
-      }
-
-      console.log(ui.divider());
-      console.log(ui.success("Ready! Run: $ claude"));
-      console.log("");
-    }
+    await writeRuntimeEnvironment({
+      adapter,
+      spec,
+      registry,
+      targetDir,
+      envSetup: summary.envSetup,
+      pluginCommands: summary.pluginCommands,
+      quick: options.quick,
+    });
   });

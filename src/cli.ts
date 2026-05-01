@@ -22,7 +22,7 @@ const program = new Command();
 program
   .name("kairn")
   .description(
-    "Compile natural language intent into optimized Claude Code environments"
+    "Compile natural language intent into optimized agent environments"
   )
   .version(pkg.version)
   .option("--no-color", "Disable colored output");

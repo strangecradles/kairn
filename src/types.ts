@@ -99,7 +99,16 @@ export interface CompileProgress {
   estimate?: string;
 }
 
-export type RuntimeTarget = "claude-code" | "hermes";
+export const RUNTIME_TARGETS = [
+  "generic",
+  "codex",
+  "claude-code",
+  "opencode",
+  "forgecode",
+  "hermes",
+] as const;
+
+export type RuntimeTarget = typeof RUNTIME_TARGETS[number];
 
 export interface Clarification {
   question: string;
